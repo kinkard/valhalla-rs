@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Valhalla Debug</title>
+        <meta
+            name="viewport"
+            content="initial-scale=1,maximum-scale=1,user-scalable=no"
+        />
+        <script src="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.js"></script>
+        <link
+            href="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.css"
+            rel="stylesheet"
+        />
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            #map {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                width: 100%;
+            }
+            #slider {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                margin: 30px;
+            }
+            #button {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                z-index: 1;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div id="map"></div>
+        <input
+            id="slider"
+            type="range"
+            min="0"
+            max="1.0"
+            value="1.0"
+            step="0.001"
+        />
+        <button id="button">Load GeoJSON</button>
+
+        <script>
+            mapboxgl.accessToken = "{{MAPBOX_ACCESS_TOKEN}}";
+            const map = new mapboxgl.Map({
+                container: "map",
+                style: "mapbox://styles/mapbox/streets-v11",
+                center: [18.2, 58.5],
+                zoom: 7,
+            });
+
+            // This source will be filled by data later in the button callback handler
+            geojsonData = {
+                type: "FeatureCollection",
+                features: [],
+            };
+
+            map.on("load", function () {
+                map.addSource("debug", {
+                    type: "geojson",
+                    data: geojsonData,
+                });
+                map.addLayer({
+                    id: "debug-line",
+                    type: "line",
+                    source: "debug",
+                    layout: {},
+                    paint: {
+                        "line-color": [
+                            "interpolate",
+                            ["linear"],
+                            ["get", "progress"],
+                            0,
+                            "#FF0000", // Start color (e.g., red)
+                            1.0, // progress is changing from 0.0 to 1.0
+                            "#00FF00", // End color (e.g., green)
+                        ],
+                        // Interpolate width to show if same line is covered multiple times
+                        "line-width": [
+                            "interpolate",
+                            ["linear"],
+                            ["get", "progress"],
+                            0,
+                            6, // Start width
+                            1.0, // progress is changing from 0.0 to 1.0
+                            1, // End width
+                        ],
+                    },
+                });
+
+                // Function to update the visibility of lines based on slider value
+                const showLinesForProgress = (progress) => {
+                    const filteredFeatures = geojsonData.features.filter(
+                        (feature) => feature.properties.progress <= progress,
+                    );
+                    const filteredData = {
+                        type: "FeatureCollection",
+                        features: filteredFeatures,
+                    };
+                    map.getSource("debug").setData(filteredData);
+                };
+
+                // Initial update with the full range of lines
+                showLinesForProgress(1.0);
+
+                // Event listener for the slider
+                document
+                    .getElementById("slider")
+                    .addEventListener("input", (event) => {
+                        const value = parseFloat(event.target.value);
+                        showLinesForProgress(value);
+                    });
+
+                // Right-click (contextmenu) handler to copy coordinates to clipboard
+                map.on("contextmenu", (e) => {
+                    const coordinates = e.lngLat.toArray().join(", ");
+                    navigator.clipboard
+                        .writeText(coordinates)
+                        .then(() => {
+                            alert(
+                                "Coordinates copied to clipboard: " +
+                                    coordinates,
+                            );
+                        })
+                        .catch((err) => {
+                            console.error(
+                                "Failed to copy coordinates to clipboard: ",
+                                err,
+                            );
+                        });
+                });
+
+                // Button click handler to load new GeoJSON data
+                document
+                    .getElementById("button")
+                    .addEventListener("click", () => {
+                        const payload = {
+                            locations: [
+                                {
+                                    lon: 18.297982,
+                                    lat: 57.6379361,
+                                    type: "break",
+                                },
+                                {
+                                    lon: 18.0710935,
+                                    lat: 59.3251172,
+                                    type: "break",
+                                },
+                            ],
+                            units: "kilometers",
+                            costing: "auto",
+                            costing_options: {
+                                auto: {
+                                    maneuver_penalty: 5,
+                                    country_crossing_penalty: 0,
+                                    country_crossing_cost: 600,
+                                    width: 1.6,
+                                    height: 1.9,
+                                    use_highways: 1,
+                                    use_tolls: 1,
+                                    use_ferry: 1,
+                                    ferry_cost: 300,
+                                    use_living_streets: 0.5,
+                                    use_tracks: 1,
+                                    private_access_penalty: 450,
+                                    ignore_closures: true,
+                                    ignore_restrictions: true,
+                                    ignore_access: true,
+                                    closure_factor: 9,
+                                    service_penalty: 15,
+                                    service_factor: 1,
+                                    exclude_unpaved: 0,
+                                    shortest: false,
+                                    exclude_cash_only_tolls: false,
+                                    top_speed: 140,
+                                    fixed_speed: 0,
+                                    toll_booth_penalty: 0,
+                                    toll_booth_cost: 15,
+                                    gate_penalty: 300,
+                                    gate_cost: 0,
+                                    include_hov2: true,
+                                    include_hov3: true,
+                                    include_hot: true,
+                                    disable_hierarchy_pruning: true,
+                                },
+                            },
+                            action: "route",
+                        };
+
+                        fetch("http://localhost:3000/api/request", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                url: "http://localhost:8002/expansion",
+                                payload: payload,
+                            }),
+                        })
+                            .then((response) => response.json())
+                            .then((data) => {
+                                geojsonData = data;
+                                // progress is changing from 0.0 for the first line to the 1.0 for the last line
+                                const total = geojsonData.features.length - 1;
+                                geojsonData.features.forEach((feature, i) => {
+                                    feature.properties.progress = i / total;
+                                });
+
+                                // Reset the slider and show all lines
+                                document.getElementById("slider").value = 1.0;
+                                showLinesForProgress(1.0);
+                            })
+                            .catch((err) => {
+                                console.error(
+                                    "Failed to load GeoJSON data: ",
+                                    err,
+                                );
+                            });
+                    });
+            });
+        </script>
+    </body>
+</html>
