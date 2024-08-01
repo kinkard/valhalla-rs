@@ -68,6 +68,7 @@
       </div>
       <label for="slider">Graph expansion progress:</label>
       <input id="slider" type="range" min="0" max="1.0" value="1.0" step="0.001" />
+      <label id="edges-count">Explored 0 edges</label>
       <button id="button">Load GeoJSON</button>
       <div id="error-message"></div>
     </div>
@@ -179,6 +180,7 @@
 
         // Button click handler to load new GeoJSON data
         document.getElementById("button").addEventListener("click", () => {
+          const errorMessage = document.getElementById("error-message");
           const locationsInput = document.getElementById("locations").value;
           if (!locationsInput) {
             errorMessage.textContent = "Locations JSON is required.";
@@ -194,6 +196,13 @@
           }
           addMarkers(locations);
 
+          // clear the previous lines to clearly indicate that new request is in progress
+          geojsonData = {
+            type: "FeatureCollection",
+            features: [],
+          };
+          map.getSource("debug").setData(geojsonData);
+
           sendValhallaRequest("expansion", locations, { action: "route" })
             .then((response) => response.json())
             .then((data) => {
@@ -208,6 +217,7 @@
               geojsonData.features.forEach((feature, i) => {
                 feature.properties.progress = i / total;
               });
+              document.getElementById("edges-count").textContent = `Explored ${total} edges`;
 
               // Reset the slider and show all lines
               document.getElementById("slider").value = 1.0;
