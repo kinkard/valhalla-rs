@@ -43,6 +43,11 @@
         color: red;
         font-weight: bold;
       }
+      .popup-content {
+        max-width: 600px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
     </style>
   </head>
 
@@ -134,27 +139,31 @@
           showLinesForProgress(value);
         });
 
-        // Right-click (contextmenu) handler to copy coordinates to clipboard
         map.on("contextmenu", (e) => {
-          const coordinates = e.lngLat.toArray().join(", ");
-          navigator.clipboard
-            .writeText(coordinates)
-            .then(() => {
-              alert("Coordinates copied to clipboard: " + coordinates);
+          const coordinates = e.lngLat.toArray();
+          const locations = [
+            {
+              lat: coordinates[1],
+              lon: coordinates[0],
+            },
+          ];
+
+          sendValhallaRequest("locate", locations, { verbose: true })
+            .then((response) => response.json())
+            .then((data) => {
+              const popupContent = `<div class="popup-content">
+                  <pre>${JSON.stringify(data, null, 2)}</pre>
+              </div>`;
+
+              new mapboxgl.Popup().setLngLat(coordinates).setHTML(popupContent).addTo(map);
             })
             .catch((err) => {
-              console.error("Failed to copy coordinates to clipboard: ", err);
+              console.error("Failed to fetch data: ", err);
+              const popup = new mapboxgl.Popup()
+                .setLngLat(coordinates)
+                .setHTML(`<p>Failed to fetch data: ${err.message}</p>`)
+                .addTo(map);
             });
-        });
-
-        // Toggle custom URL input based on select value
-        document.getElementById("url").addEventListener("change", (event) => {
-          const customUrlInput = document.getElementById("custom-url");
-          if (event.target.value === "custom") {
-            customUrlInput.style.display = "block";
-          } else {
-            customUrlInput.style.display = "none";
-          }
         });
 
         // Function to add markers on the map
@@ -171,9 +180,6 @@
         // Button click handler to load new GeoJSON data
         document.getElementById("button").addEventListener("click", () => {
           const locationsInput = document.getElementById("locations").value;
-          const parametersInput = document.getElementById("parameters").value;
-          const errorMessage = document.getElementById("error-message");
-
           if (!locationsInput) {
             errorMessage.textContent = "Locations JSON is required.";
             return;
@@ -188,34 +194,7 @@
           }
           addMarkers(locations);
 
-          let parameters;
-          try {
-            parameters = JSON.parse(parametersInput);
-          } catch (e) {
-            errorMessage.textContent = "Invalid Parameters JSON.";
-            return;
-          }
-
-          let url = document.getElementById("url").value;
-          if (!url) {
-            errorMessage.textContent = "Enter or select URL";
-            return;
-          }
-          fetch("http://localhost:3000/api/request", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              url: `http://${url}/expansion`,
-              payload: {
-                locations: locations,
-                // Required for the Valhalla /expansion endpoint
-                action: "route",
-                ...parameters,
-              },
-            }),
-          })
+          sendValhallaRequest("expansion", locations, { action: "route" })
             .then((response) => response.json())
             .then((data) => {
               if (!data.type || data.type !== "FeatureCollection") {
@@ -242,6 +221,40 @@
             });
         });
       });
+
+      function sendValhallaRequest(endpoint, locations, addons) {
+        const parametersInput = document.getElementById("parameters").value;
+        const errorMessage = document.getElementById("error-message");
+
+        let parameters;
+        try {
+          parameters = JSON.parse(parametersInput);
+        } catch (e) {
+          errorMessage.textContent = "Invalid Parameters JSON.";
+          return;
+        }
+
+        let url = document.getElementById("url").value;
+        if (!url) {
+          errorMessage.textContent = "Enter or select URL";
+          return;
+        }
+
+        return fetch("http://localhost:3000/api/request", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: `http://${url}/${endpoint}`,
+            payload: {
+              locations: locations,
+              ...addons,
+              ...parameters,
+            },
+          }),
+        });
+      }
     </script>
   </body>
 </html>
