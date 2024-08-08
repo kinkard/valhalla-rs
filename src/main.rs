@@ -57,7 +57,9 @@ async fn serve_index_html() -> Result<Html<String>, (StatusCode, String)> {
 
 #[derive(Deserialize)]
 struct RequestToForward {
-    url: String,
+    /// Valhalla API endpoint. See https://valhalla.github.io/valhalla/api for more details.
+    endpoint: String,
+    /// Data to send
     payload: Value,
 }
 
@@ -65,10 +67,10 @@ async fn forward_request(
     State(state): State<AppState>,
     Json(request): Json<RequestToForward>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    info!("Requested {}", request.url);
+    info!("Requested /{}", request.endpoint);
     let response = state
         .http_client
-        .post(request.url)
+        .post(format!("http://localhost:8002/{}", request.endpoint))
         .json(&request.payload)
         .send()
         .await
