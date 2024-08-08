@@ -163,27 +163,35 @@
       });
 
       map.on("contextmenu", (e) => {
-        const coordinates = e.lngLat.toArray();
         const locations = [
           {
-            lat: coordinates[1],
-            lon: coordinates[0],
+            lat: e.lngLat.lat,
+            lon: e.lngLat.lng,
           },
         ];
 
         sendValhallaRequest("locate", locations, { verbose: true })
           .then((response) => response.json())
           .then((data) => {
+            let edge;
+            let popup_coord;
+            try {
+              edge = data[0]["edges"][0];
+              popup_coord = [edge["correlated_lon"], edge["correlated_lat"]];
+            } catch {
+              edge = data;
+              popup_coord = e.lngLat;
+            }
             const popupContent = `<div class="popup-content">
-                  <pre>${JSON.stringify(data, null, 2)}</pre>
+                  <pre>${JSON.stringify(edge, null, 2)}</pre>
               </div>`;
 
-            new mapboxgl.Popup().setLngLat(coordinates).setHTML(popupContent).addTo(map);
+            new mapboxgl.Popup().setLngLat(popup_coord).setHTML(popupContent).addTo(map);
           })
           .catch((err) => {
             console.error("Failed to fetch data: ", err);
             const popup = new mapboxgl.Popup()
-              .setLngLat(coordinates)
+              .setLngLat(e.lngLat)
               .setHTML(`<p>Failed to fetch data: ${err.message}</p>`)
               .addTo(map);
           });
