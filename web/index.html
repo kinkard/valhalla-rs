@@ -70,11 +70,14 @@
       <datalist id="url-options">
         <option value="localhost:8002"></option>
       </datalist>
+      <button id="do-route">Do route</button>
     </div>
-    <label for="slider">Graph expansion progress:</label>
-    <input id="slider" type="range" min="0" max="1.0" value="1.0" step="0.001" />
-    <label id="edges-count">Explored 0 edges</label>
-    <button id="button">Load GeoJSON</button>
+    <div>
+      <label for="slider">Graph expansion progress:</label>
+      <input id="slider" type="range" min="0" max="1.0" value="1.0" step="0.001" />
+      <label id="edges-count">Explored 0 edges</label>
+      <button id="do-expansion">Do expansion</button>
+    </div>
     <div id="error-message"></div>
   </div>
   <div id="map"></div>
@@ -87,21 +90,42 @@
       zoom: 7,
     });
 
-    // This source will be filled by data later in the button callback handler
-    let geojsonData = {
-      type: "FeatureCollection",
-      features: [],
+    let routeGeometry = {
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: []
+      }
     };
-
     map.on("load", function () {
-      map.addSource("debug", {
+      map.addSource("route", {
         type: "geojson",
-        data: geojsonData,
+        data: routeGeometry
+      });
+      map.addLayer({
+        id: "route-line",
+        type: "line",
+        source: "route",
+        layout: {},
+        paint: {
+          "line-color": "#aaaa00",
+          "line-width": 10,
+        }
+      });
+
+      // This source will be filled by data later in the button callback handler
+      let expansionGeojson = {
+        type: "FeatureCollection",
+        features: [],
+      };
+      map.addSource("expansion", {
+        type: "geojson",
+        data: expansionGeojson,
       });
       map.addLayer({
         id: "debug-line",
         type: "line",
-        source: "debug",
+        source: "expansion",
         layout: {},
         paint: {
           "line-color": [
@@ -128,12 +152,12 @@
 
       // Function to update the visibility of lines based on slider value
       const showLinesForProgress = (progress) => {
-        const filteredFeatures = geojsonData.features.filter((feature) => feature.properties.progress <= progress);
+        const filteredFeatures = expansionGeojson.features.filter((feature) => feature.properties.progress <= progress);
         const filteredData = {
           type: "FeatureCollection",
           features: filteredFeatures,
         };
-        map.getSource("debug").setData(filteredData);
+        map.getSource("expansion").setData(filteredData);
       };
 
       // Initial update with the full range of lines
@@ -172,19 +196,7 @@
           });
       });
 
-      // Function to add markers on the map
-      const addMarkers = (locations) => {
-        // Remove existing markers
-        document.querySelectorAll(".mapboxgl-marker").forEach((marker) => marker.remove());
-
-        locations.forEach((location, index) => {
-          const color = index === 0 ? "green" : index === locations.length - 1 ? "red" : "gray";
-          new mapboxgl.Marker({ color: color }).setLngLat([location.lon, location.lat]).addTo(map);
-        });
-      };
-
-      // Button click handler to load new GeoJSON data
-      document.getElementById("button").addEventListener("click", () => {
+      document.getElementById("do-route").addEventListener("click", () => {
         const errorMessage = document.getElementById("error-message");
         const locationsInput = document.getElementById("locations").value;
         if (!locationsInput) {
@@ -199,27 +211,77 @@
           errorMessage.textContent = "Invalid Locations JSON.";
           return;
         }
-        addMarkers(locations);
+        showMarkers(locations);
 
         // clear the previous lines to clearly indicate that new request is in progress
-        geojsonData = {
+        expansionGeojson = {
           type: "FeatureCollection",
           features: [],
         };
-        map.getSource("debug").setData(geojsonData);
+        map.getSource("expansion").setData(expansionGeojson);
+
+        routeGeometry.geometry.coordinates = [];
+        map.getSource("route").setData(routeGeometry);
+
+        sendValhallaRequest("route", locations, {})
+          .then((response) => response.json())
+          .then((data) => {
+            let route_shape;
+            try {
+              route_shape = data["trip"]["legs"][0]["shape"];
+            } catch (e) {
+              errorMessage.textContent = "Invalid /route response: " + JSON.stringify(data);
+              return;
+            }
+
+            routeGeometry.geometry.coordinates = decodePolyline6(route_shape);
+            map.getSource("route").setData(routeGeometry);
+
+            // Clear error message
+            errorMessage.textContent = "";
+          })
+          .catch((err) => {
+            errorMessage.textContent = "Failed to load GeoJSON data: " + err;
+          });
+      });
+
+
+      document.getElementById("do-expansion").addEventListener("click", () => {
+        const errorMessage = document.getElementById("error-message");
+        const locationsInput = document.getElementById("locations").value;
+        if (!locationsInput) {
+          errorMessage.textContent = "Locations JSON is required.";
+          return;
+        }
+
+        let locations;
+        try {
+          locations = JSON.parse(locationsInput);
+        } catch (e) {
+          errorMessage.textContent = "Invalid Locations JSON.";
+          return;
+        }
+        showMarkers(locations);
+
+        // clear the previous lines to clearly indicate that new request is in progress
+        expansionGeojson = {
+          type: "FeatureCollection",
+          features: [],
+        };
+        map.getSource("expansion").setData(expansionGeojson);
 
         sendValhallaRequest("expansion", locations, { action: "route" })
           .then((response) => response.json())
           .then((data) => {
             if (!data.type || data.type !== "FeatureCollection") {
-              errorMessage.textContent = "Invalid GeoJSON response: " + JSON.stringify(data);
+              errorMessage.textContent = "Invalid /expansion response: " + JSON.stringify(data);
               return;
             }
 
-            geojsonData = data;
+            expansionGeojson = data;
             // progress is changing from 0.0 for the first line to the 1.0 for the last line
-            const total = geojsonData.features.length - 1;
-            geojsonData.features.forEach((feature, i) => {
+            const total = expansionGeojson.features.length - 1;
+            expansionGeojson.features.forEach((feature, i) => {
               feature.properties.progress = i / total;
             });
             document.getElementById("edges-count").textContent = `Explored ${total} edges`;
@@ -269,6 +331,60 @@
           },
         }),
       });
+    }
+
+    function showMarkers(locations) {
+      // Remove existing markers
+      document.querySelectorAll(".mapboxgl-marker").forEach((marker) => marker.remove());
+
+      locations.forEach((location, index) => {
+        const color = index === 0 ? "green" : index === locations.length - 1 ? "red" : "gray";
+        new mapboxgl.Marker({ color: color }).setLngLat([location.lon, location.lat]).addTo(map);
+      });
+    }
+
+    function decodePolyline6(encoded) {
+      let currentPosition = 0;
+      const len = encoded.length;
+      const coordinates = [];
+      let lat = 0;
+      let lng = 0;
+
+      function zigzagDecode(val) {
+        return ((val & 1) ? ~(val >> 1) : (val >> 1));
+      }
+
+      while (currentPosition < len) {
+        let shift = 0;
+        let result = 0;
+        let byte;
+
+        do {
+          byte = encoded.charCodeAt(currentPosition++) - 63;
+          result |= (byte & 0x1f) << shift;
+          shift += 5;
+        } while (byte >= 0x20);
+
+        // ZigZag decoding
+        const deltaLat = zigzagDecode(result);
+        lat += deltaLat;
+
+        shift = 0;
+        result = 0;
+
+        do {
+          byte = encoded.charCodeAt(currentPosition++) - 63;
+          result |= (byte & 0x1f) << shift;
+          shift += 5;
+        } while (byte >= 0x20);
+
+        const deltaLng = zigzagDecode(result);
+        lng += deltaLng;
+
+        coordinates.push([lng * 1e-6, lat * 1e-6]);  // Use 1e-6 for Polyline6
+      }
+
+      return coordinates;
     }
   </script>
 </body>
