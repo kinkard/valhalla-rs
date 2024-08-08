@@ -1,270 +1,276 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Valhalla Debug</title>
-    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.css" rel="stylesheet" />
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        display: flex;
-        height: 100vh;
-      }
-      #map {
-        flex: 1;
-        position: relative;
-      }
-      #sidebar {
-        width: 300px;
-        padding: 10px;
-        background: white;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-        z-index: 2;
-        display: flex;
-        flex-direction: column;
-      }
-      textarea,
-      input,
-      button,
-      label,
-      select {
-        width: 100%;
-        box-sizing: border-box;
-        margin-bottom: 10px;
-        padding: 5px;
-      }
-      button {
-        margin-top: auto;
-      }
-      #error-message {
-        color: red;
-        font-weight: bold;
-      }
-      .popup-content {
-        max-width: 600px;
-        max-height: 400px;
-        overflow-y: auto;
-      }
-    </style>
-  </head>
 
-  <body>
-    <div id="sidebar">
-      <textarea id="locations" rows="5" placeholder="Enter locations JSON here...">
-[{"lon":18.297982,"lat":57.6379361,"type":"break"}, {"lon":18.0710935,"lat":59.3251172,"type":"break"}]</textarea
-      >
-      <textarea id="parameters" rows="10" placeholder="Enter parameters JSON here...">
-{"units":"kilometers", "costing":"auto","costing_options":{"auto":{"maneuver_penalty":5,"country_crossing_penalty":0,"country_crossing_cost":600,"width":1.6,"height":1.9,"use_highways":1,"use_tolls":1,"use_ferry":1,"ferry_cost":300,"use_living_streets":0.5,"use_tracks":0,"private_access_penalty":450,"ignore_closures":false,"ignore_restrictions":false,"ignore_access":false,"closure_factor":9,"service_penalty":15,"service_factor":1,"exclude_unpaved":1,"shortest":false,"exclude_cash_only_tolls":false,"top_speed":140,"fixed_speed":0,"toll_booth_penalty":0,"toll_booth_cost":15,"gate_penalty":300,"gate_cost":30,"include_hov2":false,"include_hov3":false,"include_hot":false,"disable_hierarchy_pruning":false}}}</textarea
-      >
-      <div>
-        <label for="url">Select or Enter URL:</label>
-        <input list="url-options" id="url" name="url" placeholder="localhost:8002" />
-        <datalist id="url-options">
-          <option value="localhost:8002"></option>
-        </datalist>
-      </div>
-      <label for="slider">Graph expansion progress:</label>
-      <input id="slider" type="range" min="0" max="1.0" value="1.0" step="0.001" />
-      <label id="edges-count">Explored 0 edges</label>
-      <button id="button">Load GeoJSON</button>
-      <div id="error-message"></div>
+<head>
+  <meta charset="utf-8" />
+  <title>Valhalla Debug</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+    }
+
+    #map {
+      flex: 1;
+      position: relative;
+    }
+
+    #sidebar {
+      width: 300px;
+      padding: 10px;
+      background: white;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+    }
+
+    textarea,
+    input,
+    button,
+    label,
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+      padding: 5px;
+    }
+
+    button {
+      margin-top: auto;
+    }
+
+    #error-message {
+      color: red;
+      font-weight: bold;
+    }
+
+    .popup-content {
+      max-width: 600px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="sidebar">
+    <textarea id="locations" rows="5" placeholder="Enter locations JSON here...">
+[{"lon":18.297982,"lat":57.6379361,"type":"break"}, {"lon":18.0710935,"lat":59.3251172,"type":"break"}]</textarea>
+    <textarea id="parameters" rows="10" placeholder="Enter parameters JSON here...">
+{"units":"kilometers", "costing":"auto","costing_options":{"auto":{"maneuver_penalty":5,"country_crossing_penalty":0,"country_crossing_cost":600,"width":1.6,"height":1.9,"use_highways":1,"use_tolls":1,"use_ferry":1,"ferry_cost":300,"use_living_streets":0.5,"use_tracks":0,"private_access_penalty":450,"ignore_closures":false,"ignore_restrictions":false,"ignore_access":false,"closure_factor":9,"service_penalty":15,"service_factor":1,"exclude_unpaved":1,"shortest":false,"exclude_cash_only_tolls":false,"top_speed":140,"fixed_speed":0,"toll_booth_penalty":0,"toll_booth_cost":15,"gate_penalty":300,"gate_cost":30,"include_hov2":false,"include_hov3":false,"include_hot":false,"disable_hierarchy_pruning":false}}}</textarea>
+    <div>
+      <label for="url">Select or Enter URL:</label>
+      <input list="url-options" id="url" name="url" placeholder="localhost:8002" />
+      <datalist id="url-options">
+        <option value="localhost:8002"></option>
+      </datalist>
     </div>
-    <div id="map"></div>
-    <script>
-      mapboxgl.accessToken = "{{MAPBOX_ACCESS_TOKEN}}";
-      const map = new mapboxgl.Map({
-        container: "map",
-        style: "mapbox://styles/mapbox/streets-v11",
-        center: [18.2, 58.5],
-        zoom: 7,
+    <label for="slider">Graph expansion progress:</label>
+    <input id="slider" type="range" min="0" max="1.0" value="1.0" step="0.001" />
+    <label id="edges-count">Explored 0 edges</label>
+    <button id="button">Load GeoJSON</button>
+    <div id="error-message"></div>
+  </div>
+  <div id="map"></div>
+  <script>
+    mapboxgl.accessToken = "{{MAPBOX_ACCESS_TOKEN}}";
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/mapbox/streets-v11",
+      center: [18.2, 58.5],
+      zoom: 7,
+    });
+
+    // This source will be filled by data later in the button callback handler
+    let geojsonData = {
+      type: "FeatureCollection",
+      features: [],
+    };
+
+    map.on("load", function () {
+      map.addSource("debug", {
+        type: "geojson",
+        data: geojsonData,
+      });
+      map.addLayer({
+        id: "debug-line",
+        type: "line",
+        source: "debug",
+        layout: {},
+        paint: {
+          "line-color": [
+            "interpolate",
+            ["linear"],
+            ["get", "progress"],
+            0,
+            "#FF0000", // Start color (e.g., red)
+            1.0, // progress is changing from 0.0 to 1.0
+            "#00FF00", // End color (e.g., green)
+          ],
+          // Interpolate width to show if same line is covered multiple times
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["get", "progress"],
+            0,
+            6, // Start width
+            1.0, // progress is changing from 0.0 to 1.0
+            1, // End width
+          ],
+        },
       });
 
-      // This source will be filled by data later in the button callback handler
-      let geojsonData = {
-        type: "FeatureCollection",
-        features: [],
+      // Function to update the visibility of lines based on slider value
+      const showLinesForProgress = (progress) => {
+        const filteredFeatures = geojsonData.features.filter((feature) => feature.properties.progress <= progress);
+        const filteredData = {
+          type: "FeatureCollection",
+          features: filteredFeatures,
+        };
+        map.getSource("debug").setData(filteredData);
       };
 
-      map.on("load", function () {
-        map.addSource("debug", {
-          type: "geojson",
-          data: geojsonData,
-        });
-        map.addLayer({
-          id: "debug-line",
-          type: "line",
-          source: "debug",
-          layout: {},
-          paint: {
-            "line-color": [
-              "interpolate",
-              ["linear"],
-              ["get", "progress"],
-              0,
-              "#FF0000", // Start color (e.g., red)
-              1.0, // progress is changing from 0.0 to 1.0
-              "#00FF00", // End color (e.g., green)
-            ],
-            // Interpolate width to show if same line is covered multiple times
-            "line-width": [
-              "interpolate",
-              ["linear"],
-              ["get", "progress"],
-              0,
-              6, // Start width
-              1.0, // progress is changing from 0.0 to 1.0
-              1, // End width
-            ],
+      // Initial update with the full range of lines
+      showLinesForProgress(1.0);
+
+      // Event listener for the slider
+      document.getElementById("slider").addEventListener("input", (event) => {
+        const value = parseFloat(event.target.value);
+        showLinesForProgress(value);
+      });
+
+      map.on("contextmenu", (e) => {
+        const coordinates = e.lngLat.toArray();
+        const locations = [
+          {
+            lat: coordinates[1],
+            lon: coordinates[0],
           },
-        });
+        ];
 
-        // Function to update the visibility of lines based on slider value
-        const showLinesForProgress = (progress) => {
-          const filteredFeatures = geojsonData.features.filter((feature) => feature.properties.progress <= progress);
-          const filteredData = {
-            type: "FeatureCollection",
-            features: filteredFeatures,
-          };
-          map.getSource("debug").setData(filteredData);
-        };
-
-        // Initial update with the full range of lines
-        showLinesForProgress(1.0);
-
-        // Event listener for the slider
-        document.getElementById("slider").addEventListener("input", (event) => {
-          const value = parseFloat(event.target.value);
-          showLinesForProgress(value);
-        });
-
-        map.on("contextmenu", (e) => {
-          const coordinates = e.lngLat.toArray();
-          const locations = [
-            {
-              lat: coordinates[1],
-              lon: coordinates[0],
-            },
-          ];
-
-          sendValhallaRequest("locate", locations, { verbose: true })
-            .then((response) => response.json())
-            .then((data) => {
-              const popupContent = `<div class="popup-content">
+        sendValhallaRequest("locate", locations, { verbose: true })
+          .then((response) => response.json())
+          .then((data) => {
+            const popupContent = `<div class="popup-content">
                   <pre>${JSON.stringify(data, null, 2)}</pre>
               </div>`;
 
-              new mapboxgl.Popup().setLngLat(coordinates).setHTML(popupContent).addTo(map);
-            })
-            .catch((err) => {
-              console.error("Failed to fetch data: ", err);
-              const popup = new mapboxgl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(`<p>Failed to fetch data: ${err.message}</p>`)
-                .addTo(map);
-            });
-        });
-
-        // Function to add markers on the map
-        const addMarkers = (locations) => {
-          // Remove existing markers
-          document.querySelectorAll(".mapboxgl-marker").forEach((marker) => marker.remove());
-
-          locations.forEach((location, index) => {
-            const color = index === 0 ? "green" : index === locations.length - 1 ? "red" : "gray";
-            new mapboxgl.Marker({ color: color }).setLngLat([location.lon, location.lat]).addTo(map);
+            new mapboxgl.Popup().setLngLat(coordinates).setHTML(popupContent).addTo(map);
+          })
+          .catch((err) => {
+            console.error("Failed to fetch data: ", err);
+            const popup = new mapboxgl.Popup()
+              .setLngLat(coordinates)
+              .setHTML(`<p>Failed to fetch data: ${err.message}</p>`)
+              .addTo(map);
           });
-        };
-
-        // Button click handler to load new GeoJSON data
-        document.getElementById("button").addEventListener("click", () => {
-          const errorMessage = document.getElementById("error-message");
-          const locationsInput = document.getElementById("locations").value;
-          if (!locationsInput) {
-            errorMessage.textContent = "Locations JSON is required.";
-            return;
-          }
-
-          let locations;
-          try {
-            locations = JSON.parse(locationsInput);
-          } catch (e) {
-            errorMessage.textContent = "Invalid Locations JSON.";
-            return;
-          }
-          addMarkers(locations);
-
-          // clear the previous lines to clearly indicate that new request is in progress
-          geojsonData = {
-            type: "FeatureCollection",
-            features: [],
-          };
-          map.getSource("debug").setData(geojsonData);
-
-          sendValhallaRequest("expansion", locations, { action: "route" })
-            .then((response) => response.json())
-            .then((data) => {
-              if (!data.type || data.type !== "FeatureCollection") {
-                errorMessage.textContent = "Invalid GeoJSON response: " + JSON.stringify(data);
-                return;
-              }
-
-              geojsonData = data;
-              // progress is changing from 0.0 for the first line to the 1.0 for the last line
-              const total = geojsonData.features.length - 1;
-              geojsonData.features.forEach((feature, i) => {
-                feature.properties.progress = i / total;
-              });
-              document.getElementById("edges-count").textContent = `Explored ${total} edges`;
-
-              // Reset the slider and show all lines
-              document.getElementById("slider").value = 1.0;
-              showLinesForProgress(1.0);
-
-              // Clear error message
-              errorMessage.textContent = "";
-            })
-            .catch((err) => {
-              errorMessage.textContent = "Failed to load GeoJSON data: " + err;
-            });
-        });
       });
 
-      function sendValhallaRequest(endpoint, locations, addons) {
-        const parametersInput = document.getElementById("parameters").value;
-        const errorMessage = document.getElementById("error-message");
+      // Function to add markers on the map
+      const addMarkers = (locations) => {
+        // Remove existing markers
+        document.querySelectorAll(".mapboxgl-marker").forEach((marker) => marker.remove());
 
-        let parameters;
-        try {
-          parameters = JSON.parse(parametersInput);
-        } catch (e) {
-          errorMessage.textContent = "Invalid Parameters JSON.";
-          return;
-        }
-
-        let url = document.getElementById("url").value;
-        if (!url) {
-          errorMessage.textContent = "Enter or select URL";
-          return;
-        }
-
-        return fetch("http://localhost:3000/api/request", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            url: `http://${url}/${endpoint}`,
-            payload: {
-              locations: locations,
-              ...addons,
-              ...parameters,
-            },
-          }),
+        locations.forEach((location, index) => {
+          const color = index === 0 ? "green" : index === locations.length - 1 ? "red" : "gray";
+          new mapboxgl.Marker({ color: color }).setLngLat([location.lon, location.lat]).addTo(map);
         });
+      };
+
+      // Button click handler to load new GeoJSON data
+      document.getElementById("button").addEventListener("click", () => {
+        const errorMessage = document.getElementById("error-message");
+        const locationsInput = document.getElementById("locations").value;
+        if (!locationsInput) {
+          errorMessage.textContent = "Locations JSON is required.";
+          return;
+        }
+
+        let locations;
+        try {
+          locations = JSON.parse(locationsInput);
+        } catch (e) {
+          errorMessage.textContent = "Invalid Locations JSON.";
+          return;
+        }
+        addMarkers(locations);
+
+        // clear the previous lines to clearly indicate that new request is in progress
+        geojsonData = {
+          type: "FeatureCollection",
+          features: [],
+        };
+        map.getSource("debug").setData(geojsonData);
+
+        sendValhallaRequest("expansion", locations, { action: "route" })
+          .then((response) => response.json())
+          .then((data) => {
+            if (!data.type || data.type !== "FeatureCollection") {
+              errorMessage.textContent = "Invalid GeoJSON response: " + JSON.stringify(data);
+              return;
+            }
+
+            geojsonData = data;
+            // progress is changing from 0.0 for the first line to the 1.0 for the last line
+            const total = geojsonData.features.length - 1;
+            geojsonData.features.forEach((feature, i) => {
+              feature.properties.progress = i / total;
+            });
+            document.getElementById("edges-count").textContent = `Explored ${total} edges`;
+
+            // Reset the slider and show all lines
+            document.getElementById("slider").value = 1.0;
+            showLinesForProgress(1.0);
+
+            // Clear error message
+            errorMessage.textContent = "";
+          })
+          .catch((err) => {
+            errorMessage.textContent = "Failed to load GeoJSON data: " + err;
+          });
+      });
+    });
+
+    function sendValhallaRequest(endpoint, locations, addons) {
+      const parametersInput = document.getElementById("parameters").value;
+      const errorMessage = document.getElementById("error-message");
+
+      let parameters;
+      try {
+        parameters = JSON.parse(parametersInput);
+      } catch (e) {
+        errorMessage.textContent = "Invalid Parameters JSON.";
+        return;
       }
-    </script>
-  </body>
+
+      let url = document.getElementById("url").value;
+      if (!url) {
+        errorMessage.textContent = "Enter or select URL";
+        return;
+      }
+
+      return fetch("http://localhost:3000/api/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: `http://${url}/${endpoint}`,
+          payload: {
+            locations: locations,
+            ...addons,
+            ...parameters,
+          },
+        }),
+      });
+    }
+  </script>
+</body>
+
 </html>
