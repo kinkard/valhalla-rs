@@ -341,15 +341,12 @@
     function decodePolyline6(encoded) {
       let currentPosition = 0;
       const len = encoded.length;
-      const coordinates = [];
-      let lat = 0;
-      let lng = 0;
 
       function zigzagDecode(val) {
         return ((val & 1) ? ~(val >> 1) : (val >> 1));
       }
 
-      while (currentPosition < len) {
+      function readVarint() {
         let shift = 0;
         let result = 0;
         let byte;
@@ -360,22 +357,15 @@
           shift += 5;
         } while (byte >= 0x20);
 
-        // ZigZag decoding
-        const deltaLat = zigzagDecode(result);
-        lat += deltaLat;
+        return result;
+      }
 
-        shift = 0;
-        result = 0;
-
-        do {
-          byte = encoded.charCodeAt(currentPosition++) - 63;
-          result |= (byte & 0x1f) << shift;
-          shift += 5;
-        } while (byte >= 0x20);
-
-        const deltaLng = zigzagDecode(result);
-        lng += deltaLng;
-
+      let lat = 0;
+      let lng = 0;
+      const coordinates = [];
+      while (currentPosition < len) {
+        lat += zigzagDecode(readVarint());
+        lng += zigzagDecode(readVarint());
         coordinates.push([lng * 1e-6, lat * 1e-6]);  // Use 1e-6 for Polyline6
       }
 
