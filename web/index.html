@@ -347,10 +347,10 @@
           const locations = JSON.parse(document.getElementById("locations").value || '[]');
           locations[index].lon = newCoords.lng;
           locations[index].lat = newCoords.lat;
-          document.getElementById("locations").value = JSON.stringify(locations);
+          displayLocations(locations);
         });
       });
-      document.getElementById("locations").value = JSON.stringify(locations);
+      displayLocations(locations);
     }
 
     map.on('click', (e) => {
@@ -361,9 +361,18 @@
         type: 'break'
       };
       locations.push(newLocation);
-      document.getElementById("locations").value = JSON.stringify(locations);
       showMarkers(locations);
     });
+
+    function displayLocations(locations) {
+      document.getElementById("locations").value = JSON.stringify(locations, function (key, value) {
+        // limit precision of floats
+        if (typeof value === 'number') {
+          return parseFloat(value.toFixed(5));
+        }
+        return value;
+      });
+    }
 
     function decodePolyline6(encoded) {
       let currentPosition = 0;
