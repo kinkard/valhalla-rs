@@ -60,8 +60,7 @@
 
 <body>
   <div id="sidebar">
-    <textarea id="locations" rows="6" placeholder="Enter locations JSON here...">
-[{"lon":18.297982,"lat":57.6379361,"type":"break"}, {"lon":18.0710935,"lat":59.3251172,"type":"break"}]</textarea>
+    <textarea id="locations" rows="6" placeholder="Enter locations JSON here... or click on the map"></textarea>
     <textarea id="parameters" rows="25" placeholder="Enter parameters JSON here...">
 {"units":"kilometers", "costing":"auto","costing_options":{"auto":{"maneuver_penalty":5,"country_crossing_penalty":0,"country_crossing_cost":600,"width":1.6,"height":1.9,"use_highways":1,"use_tolls":1,"use_ferry":1,"ferry_cost":300,"use_living_streets":0.5,"use_tracks":0,"private_access_penalty":450,"ignore_closures":false,"ignore_restrictions":false,"ignore_access":false,"closure_factor":9,"service_penalty":15,"service_factor":1,"exclude_unpaved":1,"shortest":false,"exclude_cash_only_tolls":false,"top_speed":140,"fixed_speed":0,"toll_booth_penalty":0,"toll_booth_cost":15,"gate_penalty":300,"gate_cost":30,"include_hov2":false,"include_hov3":false,"include_hot":false,"disable_hierarchy_pruning":false}}}</textarea>
     <div>
@@ -116,7 +115,7 @@
         data: expansionGeojson,
       });
       map.addLayer({
-        id: "debug-line",
+        id: "expansion-edges",
         type: "line",
         source: "expansion",
         layout: {},
@@ -142,6 +141,14 @@
           ],
         },
       });
+
+      let locations;
+      try {
+        locations = JSON.parse(document.getElementById("locations").value);
+      } catch (e) {
+        locations = []
+      }
+      showMarkers(locations);
 
       // Function to update the visibility of lines based on slider value
       const showLinesForProgress = (progress) => {
@@ -199,18 +206,12 @@
 
       document.getElementById("do-route").addEventListener("click", () => {
         const errorMessage = document.getElementById("error-message");
-        const locationsInput = document.getElementById("locations").value;
-        if (!locationsInput) {
-          errorMessage.textContent = "Locations JSON is required.";
-          return;
-        }
 
         let locations;
         try {
-          locations = JSON.parse(locationsInput);
+          locations = JSON.parse(document.getElementById("locations").value);
         } catch (e) {
-          errorMessage.textContent = "Invalid Locations JSON.";
-          return;
+          locations = []
         }
         showMarkers(locations);
 
@@ -224,18 +225,23 @@
         routeGeometry.geometry.coordinates = [];
         map.getSource("route").setData(routeGeometry);
 
+        if (locations.length < 2) {
+          errorMessage.textContent = "At least 2 locations is required";
+          return;
+        }
+
         sendValhallaRequest("route", locations, {})
           .then((response) => response.json())
           .then((data) => {
             let route_shape;
             try {
-              route_shape = data["trip"]["legs"][0]["shape"];
+              route_shape = data["trip"]["legs"].map((leg) => decodePolyline6(leg["shape"])).flat();
             } catch (e) {
               errorMessage.textContent = "Invalid /route response: " + JSON.stringify(data);
               return;
             }
 
-            routeGeometry.geometry.coordinates = decodePolyline6(route_shape);
+            routeGeometry.geometry.coordinates = route_shape;
             map.getSource("route").setData(routeGeometry);
 
             // Clear error message
@@ -249,18 +255,12 @@
 
       document.getElementById("do-expansion").addEventListener("click", () => {
         const errorMessage = document.getElementById("error-message");
-        const locationsInput = document.getElementById("locations").value;
-        if (!locationsInput) {
-          errorMessage.textContent = "Locations JSON is required.";
-          return;
-        }
 
         let locations;
         try {
-          locations = JSON.parse(locationsInput);
+          locations = JSON.parse(document.getElementById("locations").value);
         } catch (e) {
-          errorMessage.textContent = "Invalid Locations JSON.";
-          return;
+          locations = []
         }
         showMarkers(locations);
 
@@ -271,6 +271,12 @@
         };
         map.getSource("expansion").setData(expansionGeojson);
 
+        if (locations.length < 2) {
+          errorMessage.textContent = "At least 2 locations is required";
+          return;
+        }
+
+        document.getElementById("edges-count").textContent = "Exploring...";
         sendValhallaRequest("expansion", locations, { action: "route" })
           .then((response) => response.json())
           .then((data) => {
@@ -282,10 +288,10 @@
             expansionGeojson = data;
             // progress is changing from 0.0 for the first line to the 1.0 for the last line
             const total = expansionGeojson.features.length - 1;
+            document.getElementById("edges-count").textContent = `Explored ${total} edges`;
             expansionGeojson.features.forEach((feature, i) => {
               feature.properties.progress = i / total;
             });
-            document.getElementById("edges-count").textContent = `Explored ${total} edges`;
 
             // Reset the slider and show all lines
             document.getElementById("slider").value = 1.0;
@@ -334,9 +340,30 @@
 
       locations.forEach((location, index) => {
         const color = index === 0 ? "green" : index === locations.length - 1 ? "red" : "gray";
-        new mapboxgl.Marker({ color: color }).setLngLat([location.lon, location.lat]).addTo(map);
+        const marker = new mapboxgl.Marker({ color: color, draggable: true }).setLngLat([location.lon, location.lat]).addTo(map);
+        marker.on('dragend', () => {
+          const newCoords = marker.getLngLat();
+
+          const locations = JSON.parse(document.getElementById("locations").value || '[]');
+          locations[index].lon = newCoords.lng;
+          locations[index].lat = newCoords.lat;
+          document.getElementById("locations").value = JSON.stringify(locations);
+        });
       });
+      document.getElementById("locations").value = JSON.stringify(locations);
     }
+
+    map.on('click', (e) => {
+      const locations = JSON.parse(document.getElementById("locations").value || '[]');
+      const newLocation = {
+        lon: e.lngLat.lng,
+        lat: e.lngLat.lat,
+        type: 'break'
+      };
+      locations.push(newLocation);
+      document.getElementById("locations").value = JSON.stringify(locations);
+      showMarkers(locations);
+    });
 
     function decodePolyline6(encoded) {
       let currentPosition = 0;
