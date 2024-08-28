@@ -196,10 +196,10 @@
             new mapboxgl.Popup().setLngLat(popup_coord).setHTML(popupContent).addTo(map);
           })
           .catch((err) => {
-            console.error("Failed to fetch data: ", err);
+            console.error("Bad /locate response: ", err);
             const popup = new mapboxgl.Popup()
               .setLngLat(e.lngLat)
-              .setHTML(`<p>Failed to fetch data: ${err.message}</p>`)
+              .setHTML(`<p>Bad <b>/locate</b> response: ${err.message}</p>`)
               .addTo(map);
           });
       });
@@ -233,14 +233,7 @@
         sendValhallaRequest("route", locations, {})
           .then((response) => response.json())
           .then((data) => {
-            let route_shape;
-            try {
-              route_shape = data["trip"]["legs"].map((leg) => decodePolyline6(leg["shape"])).flat();
-            } catch (e) {
-              errorMessage.textContent = "Invalid /route response: " + JSON.stringify(data);
-              return;
-            }
-
+            let route_shape = data["trip"]["legs"].map((leg) => decodePolyline6(leg["shape"])).flat();
             routeGeometry.geometry.coordinates = route_shape;
             map.getSource("route").setData(routeGeometry);
 
@@ -248,7 +241,7 @@
             errorMessage.textContent = "";
           })
           .catch((err) => {
-            errorMessage.textContent = "Failed to load GeoJSON data: " + err;
+            errorMessage.textContent = "Bad /route response: " + err;
           });
       });
 
@@ -301,7 +294,7 @@
             errorMessage.textContent = "";
           })
           .catch((err) => {
-            errorMessage.textContent = "Failed to load GeoJSON data: " + err;
+            errorMessage.textContent = "Bad /expansion response: " + err;
           });
       });
     });
