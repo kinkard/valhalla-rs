@@ -69,6 +69,10 @@
       <label for="slider">Graph expansion progress:</label>
       <input id="slider" type="range" min="0" max="1.0" value="1.0" step="0.001" />
       <label id="edges-count">Explored 0 edges</label>
+      <div>
+        <label for="route-summary">Route summary:</label>
+        <textarea id="route-summary" rows="11" cols="50"></textarea>
+      </div>
     </div>
     <div id="error-message"></div>
   </div>
@@ -225,6 +229,8 @@
         routeGeometry.geometry.coordinates = [];
         map.getSource("route").setData(routeGeometry);
 
+        document.getElementById("route-summary").textContent = "";
+
         if (locations.length < 2) {
           errorMessage.textContent = "At least 2 locations is required";
           return;
@@ -233,9 +239,17 @@
         sendValhallaRequest("route", locations, {})
           .then((response) => response.json())
           .then((data) => {
+            // Draw route polyline
             let route_shape = data["trip"]["legs"].map((leg) => decodePolyline6(leg["shape"])).flat();
             routeGeometry.geometry.coordinates = route_shape;
             map.getSource("route").setData(routeGeometry);
+
+            // Show route summary
+            let summary = "";
+            for (const [key, value] of Object.entries(data["trip"]["summary"])) {
+              summary += `"${key}": ${JSON.stringify(value)}\n`
+            }
+            document.getElementById("route-summary").textContent = summary;
 
             // Clear error message
             errorMessage.textContent = "";
