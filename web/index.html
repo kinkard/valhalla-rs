@@ -82,8 +82,8 @@
     const map = new mapboxgl.Map({
       container: "map",
       style: "mapbox://styles/mapbox/streets-v11",
-      center: [18.2, 58.5],
-      zoom: 7,
+      center: [13.15792, 55.668221],
+      zoom: 11,
     });
 
     map.on("load", function () {
@@ -144,6 +144,43 @@
         },
       });
 
+      // Source for drawing traffic lines based on information from /locate response
+      map.addSource("traffic-lines", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [],
+        },
+      });
+      map.addLayer({
+        id: "traffic-lines",
+        type: "line",
+        source: "traffic-lines",
+        layout: {},
+        paint: {
+          // Set the line color based on the jam factor
+          "line-color": [
+            "interpolate",
+            ["linear"],
+            ["get", "jamFactor"], // Access the jam factor property
+            0, "#33cc33", // Green for jamFactor 0.0 (no traffic)
+            0.25, "#ffcc00", // Yellow for jamFactor 0.25 (moderate traffic)
+            0.5, "#ffb700", // Orange for jamFactor 0.5 (slow traffic)
+            0.75, "#ff0000", // Red for jamFactor 0.75 (heavy traffic)
+            1.0, "#800000" // Dark red for jamFactor 1.0 (severe traffic)
+          ],
+          "line-width": 5,
+          // todo: Use different width depending on the edge level
+          // "line-width": [
+          //   "interpolate",
+          //   ["linear"],
+          //   ["get", "jamFactor"],
+          //   0, 2, // Thin lines for free-flowing traffic
+          //   1.0, 6 // Thicker lines for heavy traffic
+          // ],
+        }
+      });
+
       let locations;
       try {
         locations = JSON.parse(document.getElementById("locations").value);
@@ -171,6 +208,7 @@
           {
             lat: e.lngLat.lat,
             lon: e.lngLat.lng,
+            radius: 500.0, // unfortunately bigger numbers give nothing
           },
         ];
 
@@ -191,6 +229,13 @@
               </div>`;
 
             new mapboxgl.Popup().setLngLat(popup_coord).setHTML(popupContent).addTo(map);
+
+            const features = data[0]["edges"].map(to_traffic_flow).filter(flow => flow !== null).flat();
+            // Update the traffic-lines source with the new data
+            map.getSource("traffic-lines").setData({
+              type: "FeatureCollection",
+              features: features,
+            });
           })
           .catch((err) => {
             console.error("Bad /locate response: ", err);
@@ -382,6 +427,7 @@
       });
     }
 
+    // Decodes polyline into array of [lon, lat] points
     function decodePolyline6(encoded) {
       let currentPosition = 0;
       const len = encoded.length;
@@ -414,6 +460,82 @@
       }
 
       return coordinates;
+    }
+
+    // Fast approximate distance between two [lon, lat] points
+    function calcShortDist(from, to) {
+      // Earth's radius in meters
+      const R = 6371000.0;
+      // Convert degrees to radians
+      const lat1Rad = from[1] * Math.PI / 180;
+      const lat2Rad = to[1] * Math.PI / 180;
+      const lonDiffRad = (from[0] - to[0]) * Math.PI / 180;
+
+      // Calculate the approximate shortest-distance path
+      return 2.0 * Math.PI * R * Math.sqrt(
+        (Math.cos(lat2Rad) * Math.abs(lonDiffRad) / (2 * Math.PI)) ** 2 +
+        (Math.abs(from[1] - to[1]) / 360) ** 2
+      );
+    }
+
+    // Converts edge from the "/locate" response to the geojson feature that represents traffic flow
+    function to_traffic_flow(edge) {
+      const edgeLiveSpeed = edge["live_speed"];
+      if (!edgeLiveSpeed || !("breakpoint_0" in edgeLiveSpeed) || !("breakpoint_1" in edgeLiveSpeed)) {
+        return null; // Return early if live_speed is missing
+      }
+
+      // Split edge into 3 pieces
+      const length = edge["edge"]["geo_attributes"]["length"];
+      const shape = decodePolyline6(edge["edge_info"]["shape"]);
+      const breakpoint_0 = length * (edgeLiveSpeed["breakpoint_0"] || 0.0);
+      const breakpoint_1 = length * (edgeLiveSpeed["breakpoint_1"] || 0.0);
+      const { speed_0, speed_1, speed_2 } = edgeLiveSpeed; // Destructure speeds
+      let segments = [];
+      let traversed = 0.0
+      let breakpoint_0_index = 0;
+      for (let i = 0; i < shape.length - 1; i++) {
+        const step = calcShortDist(shape[i], shape[i + 1]);
+        if (speed_0 != speed_1 && traversed < breakpoint_0 && breakpoint_0 <= traversed + step) {
+          segments.push([speed_0, shape.slice(0, i + 2)]);
+          breakpoint_0_index = i + 1;
+        }
+        if (traversed < breakpoint_1 && breakpoint_1 <= traversed + step) {
+          if (speed_1 != speed_2) {
+            segments.push([speed_1, shape.slice(breakpoint_0_index, i + 1)]);
+            segments.push([speed_2, shape.slice(i)]);
+          } else {
+            segments.push([speed_2, shape.slice(breakpoint_0_index)]);
+          }
+          break;
+        }
+        traversed += step;
+      }
+
+      // Extract speed limit
+      const edgeInfo = edge["edge_info"];
+      let speedLimit = edgeInfo["speed_limit"];
+      if (speedLimit === "unlimited" || speedLimit === 255 || speedLimit === 0) {
+        speedLimit = null; // 0 means unknown and 255 is unlimited. Both are not meaningful in our case
+      }
+
+      // Determine which speed to use for comparison
+      const edgeSpeeds = edge["edge"]["speeds"];
+      const freeFlowSpeed = speedLimit ?? (edgeSpeeds["free_flow"] || edgeSpeeds["default"]);
+
+      // Return the GeoJSON feature for every segment
+      return segments.map(segment => {
+        return {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: segment[1],
+          },
+          properties: {
+            jamFactor: 1.0 - Math.min(segment[0] / freeFlowSpeed, 1.0),
+          },
+        };
+      });
     }
   </script>
 </body>
