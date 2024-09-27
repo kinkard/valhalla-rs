@@ -86,17 +86,16 @@
       zoom: 7,
     });
 
-    let routeGeometry = {
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: []
-      }
-    };
     map.on("load", function () {
       map.addSource("route", {
         type: "geojson",
-        data: routeGeometry
+        data: {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: []
+          }
+        }
       });
       map.addLayer({
         id: "route-line",
@@ -110,13 +109,12 @@
       });
 
       // This source will be filled by data later in the button callback handler
-      let expansionGeojson = {
-        type: "FeatureCollection",
-        features: [],
-      };
       map.addSource("expansion", {
         type: "geojson",
-        data: expansionGeojson,
+        data: {
+          type: "FeatureCollection",
+          features: [],
+        },
       });
       map.addLayer({
         id: "expansion-edges",
@@ -156,12 +154,7 @@
 
       // Function to update the visibility of lines based on slider value
       const showLinesForProgress = (progress) => {
-        const filteredFeatures = expansionGeojson.features.filter((feature) => feature.properties.progress <= progress);
-        const filteredData = {
-          type: "FeatureCollection",
-          features: filteredFeatures,
-        };
-        map.getSource("expansion").setData(filteredData);
+        map.setFilter("expansion-edges", ["<=", ["get", "progress"], progress]);
       };
 
       // Initial update with the full range of lines
@@ -220,14 +213,19 @@
         showMarkers(locations);
 
         // clear the previous lines to clearly indicate that new request is in progress
-        expansionGeojson = {
+        map.getSource("expansion").setData({
           type: "FeatureCollection",
           features: [],
-        };
-        map.getSource("expansion").setData(expansionGeojson);
+        });
 
-        routeGeometry.geometry.coordinates = [];
-        map.getSource("route").setData(routeGeometry);
+        // Set empty data
+        map.getSource("route").setData({
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: []
+          }
+        });
 
         document.getElementById("route-summary").textContent = "";
 
@@ -240,9 +238,13 @@
           .then((response) => response.json())
           .then((data) => {
             // Draw route polyline
-            let route_shape = data["trip"]["legs"].map((leg) => decodePolyline6(leg["shape"])).flat();
-            routeGeometry.geometry.coordinates = route_shape;
-            map.getSource("route").setData(routeGeometry);
+            map.getSource("route").setData({
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: data["trip"]["legs"].map((leg) => decodePolyline6(leg["shape"])).flat()
+              }
+            });
 
             // Show route summary
             let summary = "";
@@ -272,11 +274,10 @@
         showMarkers(locations);
 
         // clear the previous lines to clearly indicate that new request is in progress
-        expansionGeojson = {
+        map.getSource("expansion").setData({
           type: "FeatureCollection",
           features: [],
-        };
-        map.getSource("expansion").setData(expansionGeojson);
+        });
 
         if (locations.length < 2) {
           errorMessage.textContent = "At least 2 locations is required";
@@ -292,13 +293,13 @@
               return;
             }
 
-            expansionGeojson = data;
             // progress is changing from 0.0 for the first line to the 1.0 for the last line
-            const total = expansionGeojson.features.length - 1;
+            const total = data.features.length - 1;
             document.getElementById("edges-count").textContent = `Explored ${total} edges`;
-            expansionGeojson.features.forEach((feature, i) => {
+            data.features.forEach((feature, i) => {
               feature.properties.progress = i / total;
             });
+            map.getSource("expansion").setData(data);
 
             // Reset the slider and show all lines
             document.getElementById("slider").value = 1.0;
