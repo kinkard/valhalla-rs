@@ -1,7 +1,7 @@
 FROM rust:alpine as builder
 
-# Dependencies for some crates if needed
-# RUN apk add --no-cache alpine-sdk cmake
+# Dependencies for some crates
+RUN apk add --no-cache alpine-sdk openssl-dev openssl-libs-static
 
 WORKDIR /usr/src/app
 

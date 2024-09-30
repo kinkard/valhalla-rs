@@ -2,8 +2,8 @@
 
 FROM rust:alpine as builder
 
-# Dependencies for some crates if needed
-# RUN apk add --no-cache alpine-sdk cmake
+# Dependencies for some crates
+RUN apk add --no-cache alpine-sdk openssl-dev openssl-libs-static
 
 RUN rustup component add rustfmt clippy
 
