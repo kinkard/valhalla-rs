@@ -10,7 +10,7 @@ use axum::{
 use clap::Parser;
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{fs::File, io::AsyncReadExt, signal};
 use tracing::info;
 
 #[derive(Parser)]
@@ -37,7 +37,7 @@ fn main() {
         .worker_threads(
             std::thread::available_parallelism()
                 .map(NonZero::get)
-                .unwrap_or(16)
+                .unwrap_or(16) // fallback to 16 as max if we can't get the number of CPUs
                 .min(config.concurrency as usize),
         )
         .enable_all()
@@ -57,7 +57,24 @@ async fn run(config: Config) {
         .await
         .unwrap();
     info!("Listening at http://localhost:{}", config.port);
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            tokio::select! {
+                _ = signal::ctrl_c() => {
+                    info!("Ctrl+C received, shutting down");
+                }
+                _ = async {
+                    signal::unix::signal(signal::unix::SignalKind::terminate())
+                        .expect("failed to install SIGTERM signal handler")
+                        .recv()
+                        .await
+                } => {
+                    info!("SIGTERM received, shutting down");
+                }
+            }
+        })
+        .await
+        .unwrap();
 }
 
 async fn serve_index_html() -> Result<Html<String>, (StatusCode, String)> {
