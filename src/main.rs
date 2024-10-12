@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, num::NonZero};
 
 use axum::{
     extract::State,
@@ -7,28 +7,56 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use clap::Parser;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::info;
+
+#[derive(Parser)]
+struct Config {
+    /// Port to listen
+    #[arg(long, default_value_t = 3000)]
+    port: u16,
+    /// Max threads to use
+    #[arg(long, default_value_t = 4)]
+    concurrency: u16,
+}
 
 #[derive(Clone, Default)]
 struct AppState {
     http_client: reqwest::Client,
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     tracing_subscriber::fmt::init();
 
+    let config = Config::parse();
+
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(
+            std::thread::available_parallelism()
+                .map(NonZero::get)
+                .unwrap_or(16)
+                .min(config.concurrency as usize),
+        )
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(run(config))
+}
+
+async fn run(config: Config) {
     // build our application with a route
     let app = Router::new()
         .route("/", get(serve_index_html))
         .route("/api/request", post(forward_request))
         .with_state(AppState::default());
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    info!("Listening at http://localhost:3000");
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port))
+        .await
+        .unwrap();
+    info!("Listening at http://localhost:{}", config.port);
     axum::serve(listener, app).await.unwrap();
 }
 
