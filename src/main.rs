@@ -21,11 +21,15 @@ struct Config {
     /// Max threads to use
     #[arg(long, default_value_t = 4)]
     concurrency: u16,
+    /// Valhalla base url to send requests to
+    #[arg(long, default_value = "http://localhost:8002")]
+    valhalla_url: String,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct AppState {
     http_client: reqwest::Client,
+    valhalla_url: String,
 }
 
 fn main() {
@@ -51,7 +55,10 @@ async fn run(config: Config) {
     let app = Router::new()
         .route("/", get(serve_index_html))
         .route("/api/request", post(forward_request))
-        .with_state(AppState::default());
+        .with_state(AppState {
+            http_client: reqwest::Client::new(),
+            valhalla_url: config.valhalla_url,
+        });
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port))
         .await
@@ -115,7 +122,7 @@ async fn forward_request(
     info!("Requested /{}", request.endpoint);
     let response = state
         .http_client
-        .post(format!("http://localhost:8002/{}", request.endpoint))
+        .post(format!("{}/{}", state.valhalla_url, request.endpoint))
         .json(&request.payload)
         .send()
         .await
