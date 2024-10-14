@@ -70,7 +70,7 @@ impl GraphReader {
         self.tileset
             .tiles_in_bbox(min.0, min.1, max.0, max.1, level)
             .into_iter()
-            .map(|tile_id| TileId(tile_id))
+            .map(TileId)
             .collect()
     }
 
