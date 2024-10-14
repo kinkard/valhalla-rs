@@ -8,6 +8,7 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use libvalhalla::{GraphLevel, LatLon};
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::{fs::File, io::AsyncReadExt, signal};
@@ -24,12 +25,16 @@ struct Config {
     /// Valhalla base url to send requests to
     #[arg(long, default_value = "http://localhost:8002")]
     valhalla_url: String,
+    /// Path to valhalla json config file.
+    /// Required for an access to valhalla graph information.
+    valhalla_config_path: Option<String>,
 }
 
 #[derive(Clone)]
 struct AppState {
     http_client: reqwest::Client,
     valhalla_url: String,
+    graph_reader: Option<libvalhalla::GraphReader>,
 }
 
 fn main() {
@@ -55,9 +60,13 @@ async fn run(config: Config) {
     let app = Router::new()
         .route("/", get(serve_index_html))
         .route("/api/request", post(forward_request))
+        .route("/api/traffic", get(traffic))
         .with_state(AppState {
             http_client: reqwest::Client::new(),
             valhalla_url: config.valhalla_url,
+            graph_reader: config
+                .valhalla_config_path
+                .map(|path| libvalhalla::GraphReader::new(path.into())),
         });
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port))
@@ -133,4 +142,39 @@ async fn forward_request(
         .await
         .map(Json)
         .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()))
+}
+
+async fn traffic(State(state): State<AppState>) -> Result<Json<Value>, (StatusCode, String)> {
+    let Some(reader) = &state.graph_reader else {
+        return Err((
+            StatusCode::IM_A_TEAPOT,
+            "Traffic information was not enabled".to_string(),
+        ));
+    };
+
+    let edges = [GraphLevel::Arterial, GraphLevel::Highway, GraphLevel::Local]
+        .into_iter()
+        .flat_map(|level| reader.tiles_in_bbox(LatLon(55.0, 13.0), LatLon(56.0, 14.0), level))
+        .flat_map(|tile_id| {
+            // todo: this is really heavy compute operation
+            reader.get_tile_traffic_flows(tile_id)
+        })
+        .map(|edge| (edge.shape, edge.jam_factor))
+        .collect::<Vec<_>>();
+    Ok(Json(serde_json::to_value(edges).unwrap()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn smoke() {
+        tokio::spawn(run(Config {
+            port: 3000,
+            concurrency: 4,
+            valhalla_url: "".into(),
+            valhalla_config_path: None,
+        }));
+    }
 }

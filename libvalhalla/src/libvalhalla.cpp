@@ -1,0 +1,107 @@
+#include "libvalhalla.hpp"
+
+#include <valhalla/baldr/graphreader.h>
+#include <valhalla/config.h>
+#include <valhalla/midgard/encoded.h>
+#include <memory>
+
+namespace baldr = valhalla::baldr;
+namespace midgard = valhalla::midgard;
+
+namespace {
+
+struct GraphMemory : public baldr::GraphMemory {
+  GraphMemory(std::pair<char *, size_t> position) {
+    data = position.first;
+    size = position.second;
+  }
+};
+
+/// Part of the [`baldr::GraphReader::GetGraphTile()`] that gets tile
+/// from mmap file
+baldr::graph_tile_ptr get_tile(const TileSet & tileset, baldr::GraphId graphid) {
+  auto base = graphid.Tile_Base();
+
+  // We need both graph and traffic tiles to be loaded
+  auto tile_it = tileset.tiles.find(base);
+  auto traffic_it = tileset.traffic_tiles.find(base);
+  if (tile_it == tileset.tiles.end() || traffic_it == tileset.traffic_tiles.end()) {
+    return nullptr;
+  }
+
+  // This initializes the tile from mmap
+  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tile_it->second),
+                                  std::make_unique<GraphMemory>(traffic_it->second));
+}
+}  // namespace
+
+TileSet::~TileSet() {}
+
+std::shared_ptr<TileSet> new_tileset(const std::string & config_file) {
+  // Hack to expose protected `baldr::GraphReader::tile_extract_t`
+  struct TileSetReader : public baldr::GraphReader {
+    static TileSet create(const boost::property_tree::ptree & pt) {
+      auto extract = baldr::GraphReader::tile_extract_t(pt);
+      return TileSet{
+        .tiles = std::move(extract.tiles),
+        .traffic_tiles = std::move(extract.traffic_tiles),
+        .archive = std::move(extract.archive),
+        .traffic_archive = std::move(extract.traffic_archive),
+        .checksum = extract.checksum,
+      };
+    }
+  };
+
+  boost::property_tree::ptree config = valhalla::config(config_file);
+  return std::make_shared<TileSet>(TileSetReader::create(config.get_child("mjolnir")));
+}
+
+rust::vec<TileId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
+                                         GraphLevel level) const {
+  const midgard::AABB2<midgard::PointLL> bbox(min_lon, min_lat, max_lon, max_lat);
+  const auto tile_ids = baldr::TileHierarchy::levels()[static_cast<size_t>(level)].tiles.TileList(bbox);
+
+  rust::vec<TileId> result;
+  result.reserve(tile_ids.size());
+  for (auto tile_id : tile_ids) {
+    result.push_back(baldr::GraphId(tile_id, static_cast<uint32_t>(level), 0).value);
+  }
+  return result;
+}
+
+std::unique_ptr<std::vector<TrafficEdge>> TileSet::get_tile_traffic(TileId id) const {
+  auto tile = get_tile(*this, baldr::GraphId(id));
+  if (!tile) {
+    return {};
+  }
+  const auto & traffic_tile = tile->get_traffic_tile();
+  if (!traffic_tile()) {
+    return {};
+  }
+
+  std::vector<TrafficEdge> flows;
+  flows.reserve(traffic_tile.header->directed_edge_count);
+  for (uint32_t i = 0; i < traffic_tile.header->directed_edge_count; ++i) {
+    const volatile auto & live_speed = traffic_tile.speeds[i];
+    if (live_speed.speed_valid() && live_speed.get_overall_speed() > 0) {
+      const auto * de = tile->directededge(i);
+      const auto edge_info = tile->edgeinfo(de);
+
+      uint32_t speed = tile->GetSpeed(de, baldr::kDefaultFlowMask);
+
+      uint32_t road_speed = 0;
+      for (const uint32_t speed : { edge_info.speed_limit(), de->free_flow_speed(), de->speed() }) {
+        road_speed = speed;
+        if (speed != 0 && speed != baldr::kUnlimitedSpeedLimit) {
+          break;
+        }
+      }
+
+      flows.push_back({
+          .shape_ = midgard::encode(edge_info.shape()),
+          .jam_factor_ = static_cast<float>(speed) / road_speed,
+      });
+    }
+  }
+  return std::make_unique<std::vector<TrafficEdge>>(std::move(flows));
+}

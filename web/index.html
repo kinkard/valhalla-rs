@@ -73,6 +73,7 @@
         <label for="route-summary">Route summary:</label>
         <textarea id="route-summary" rows="11" cols="50"></textarea>
       </div>
+      <button id="do-traffic">Show traffic</button>
     </div>
     <div id="error-message"></div>
   </div>
@@ -355,6 +356,36 @@
           })
           .catch((err) => {
             errorMessage.textContent = "Bad /expansion response: " + err;
+          });
+      });
+
+      document.getElementById("do-traffic").addEventListener("click", () => {
+        // todo: pass current viewport
+        fetch(`${window.location.origin}/api/traffic`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const features = Object.entries(data).map(([shape, jamFactor]) => {
+              return {
+                type: "Feature",
+                geometry: {
+                  type: "LineString",
+                  coordinates: decodePolyline6(shape),
+                },
+                properties: {
+                  jamFactor: jamFactor,
+                },
+              };
+            });
+            // Update the traffic-lines source with the new data
+            map.getSource("traffic-lines").setData({
+              type: "FeatureCollection",
+              features: features,
+            });
           });
       });
     });
