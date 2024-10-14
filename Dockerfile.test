@@ -2,6 +2,9 @@
 
 FROM rust:slim-bookworm as builder
 
+# Rust tools
+RUN rustup component add rustfmt clippy
+
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
   # Required for tokio and reqwest via `openssl-sys`
