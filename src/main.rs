@@ -27,6 +27,7 @@ struct Config {
     valhalla_url: String,
     /// Path to valhalla json config file.
     /// Required for an access to valhalla graph information.
+    #[arg(long)]
     valhalla_config_path: Option<String>,
 }
 
