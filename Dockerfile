@@ -38,6 +38,9 @@ RUN touch -a -m ./libvalhalla/src/lib.rs
 RUN cargo build --release
 
 FROM debian:bookworm-slim AS runner
+# Web page with map
+WORKDIR /usr
+COPY web ./web
 # Runtime dependency for tokio and reqwest
 RUN apt-get update && apt-get install -y --no-install-recommends libssl3
 COPY --from=builder /usr/src/app/target/release/valhalla-debug /usr/local/bin/valhalla-debug
