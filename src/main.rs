@@ -1,4 +1,4 @@
-use std::{env, num::NonZero};
+use std::{collections::HashMap, env, num::NonZero};
 
 use axum::{
     extract::State,
@@ -160,8 +160,8 @@ async fn traffic(State(state): State<AppState>) -> Result<Json<Value>, (StatusCo
             // todo: this is really heavy compute operation
             reader.get_tile_traffic_flows(tile_id)
         })
-        .map(|edge| (edge.shape, edge.jam_factor))
-        .collect::<Vec<_>>();
+        .map(|edge| (edge.shape, 10 - (edge.jam_factor * 10.0).round() as i32))
+        .collect::<HashMap<_, _>>();
     Ok(Json(serde_json::to_value(edges).unwrap()))
 }
 

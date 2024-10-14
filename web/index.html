@@ -164,11 +164,11 @@
             "interpolate",
             ["linear"],
             ["get", "jamFactor"], // Access the jam factor property
-            0, "#33cc33", // Green for jamFactor 0.0 (no traffic)
-            0.25, "#ffcc00", // Yellow for jamFactor 0.25 (moderate traffic)
-            0.5, "#ffb700", // Orange for jamFactor 0.5 (slow traffic)
-            0.75, "#ff0000", // Red for jamFactor 0.75 (heavy traffic)
-            1.0, "#800000" // Dark red for jamFactor 1.0 (severe traffic)
+            0.0, "#33cc33", // Green for no traffic
+            2.5, "#ffcc00", // Yellow for moderate traffic
+            5.0, "#ffb700", // Orange for medium traffic
+            7.5, "#ff0000", // Red for heavy traffic
+            10., "#000000", // Black for blocked roads
           ],
           "line-width": 5,
           // todo: Use different width depending on the edge level
@@ -563,7 +563,7 @@
             coordinates: segment[1],
           },
           properties: {
-            jamFactor: 1.0 - Math.min(segment[0] / freeFlowSpeed, 1.0),
+            jamFactor: 10.0 - 10.0 * Math.min(segment[0] / freeFlowSpeed, 1.0),
           },
         };
       });
