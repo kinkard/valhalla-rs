@@ -1,4 +1,4 @@
-FROM rust:slim-bookworm as builder
+FROM rust:slim-bookworm AS builder
 
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -37,7 +37,7 @@ RUN touch -a -m ./src/main.rs
 RUN touch -a -m ./libvalhalla/src/lib.rs
 RUN cargo build --release
 
-FROM debian:bookworm-slim as runner
+FROM debian:bookworm-slim AS runner
 # Runtime dependency for tokio and reqwest
 RUN apt-get update && apt-get install -y --no-install-recommends libssl3
 COPY --from=builder /usr/src/app/target/release/valhalla-debug /usr/local/bin/valhalla-debug
