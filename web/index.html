@@ -231,12 +231,11 @@
 
             new mapboxgl.Popup().setLngLat(popup_coord).setHTML(popupContent).addTo(map);
 
-            const features = data[0]["edges"].map(to_traffic_flow).filter(flow => flow !== null).flat();
-            // Update the traffic-lines source with the new data
-            map.getSource("traffic-lines").setData({
-              type: "FeatureCollection",
-              features: features,
-            });
+            // // Update the traffic-lines source with the new data
+            // map.getSource("traffic-lines").setData({
+            //   type: "FeatureCollection",
+            //   features: data[0]["edges"].map(to_traffic_flow).filter(flow => flow !== null).flat(),
+            // });
           })
           .catch((err) => {
             console.error("Bad /locate response: ", err);
