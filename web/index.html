@@ -359,8 +359,10 @@
       });
 
       document.getElementById("do-traffic").addEventListener("click", () => {
-        // todo: pass current viewport
-        fetch(`${window.location.origin}/api/traffic`, {
+        const bounds = map.getBounds();
+        const bbox = `${bounds.getSouth()},${bounds.getWest()};${bounds.getNorth()},${bounds.getEast()}`;
+        // todo: probably we want to limit road graph level based on a zoom level
+        fetch(`${window.location.origin}/api/traffic/${bbox}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -385,7 +387,13 @@
               type: "FeatureCollection",
               features: features,
             });
-          });
+
+            // Clear error message
+            errorMessage.textContent = "";
+          })
+          .catch((err) => {
+            errorMessage.textContent = "Bad /api/traffic/ response: " + err;
+          });;
       });
     });
 

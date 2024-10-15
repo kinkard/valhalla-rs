@@ -1,7 +1,7 @@
 use std::{collections::HashMap, env, num::NonZero};
 
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::Html,
     routing::{get, post},
@@ -61,7 +61,7 @@ async fn run(config: Config) {
     let app = Router::new()
         .route("/", get(serve_index_html))
         .route("/api/request", post(forward_request))
-        .route("/api/traffic", get(traffic))
+        .route("/api/traffic/:bbox", get(traffic))
         .with_state(AppState {
             http_client: reqwest::Client::new(),
             valhalla_url: config.valhalla_url,
@@ -145,7 +145,17 @@ async fn forward_request(
         .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()))
 }
 
-async fn traffic(State(state): State<AppState>) -> Result<Json<Value>, (StatusCode, String)> {
+async fn traffic(
+    State(state): State<AppState>,
+    Path(bbox): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let Some(bbox) = parse_bbox(&bbox) else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Bad bbox, expecting 'min_lat,min_lon;max_lat,max_lon'".to_string(),
+        ));
+    };
+
     let Some(reader) = &state.graph_reader else {
         return Err((
             StatusCode::IM_A_TEAPOT,
@@ -155,7 +165,17 @@ async fn traffic(State(state): State<AppState>) -> Result<Json<Value>, (StatusCo
 
     let edges = [GraphLevel::Arterial, GraphLevel::Highway, GraphLevel::Local]
         .into_iter()
-        .flat_map(|level| reader.tiles_in_bbox(LatLon(55.0, 13.0), LatLon(56.0, 14.0), level))
+        .map(|level| reader.tiles_in_bbox(bbox.0, bbox.1, level))
+        // Limit number of traffic tiles we fetch
+        .scan(0, |count, tiles| {
+            *count += tiles.len();
+            if *count < 12 {
+                Some(tiles)
+            } else {
+                None
+            }
+        })
+        .flatten()
         .flat_map(|tile_id| {
             // todo: this is really heavy compute operation
             reader.get_tile_traffic_flows(tile_id)
@@ -165,17 +185,48 @@ async fn traffic(State(state): State<AppState>) -> Result<Json<Value>, (StatusCo
     Ok(Json(serde_json::to_value(edges).unwrap()))
 }
 
+fn parse_coordinate(coord: &str) -> Option<LatLon> {
+    let (lat, lon) = coord.split_once(',')?;
+    let lat = lat.parse::<f32>().ok()?;
+    let lon = lon.parse::<f32>().ok()?;
+    Some(LatLon(lat, lon))
+}
+
+fn parse_bbox(bbox: &str) -> Option<(LatLon, LatLon)> {
+    let (min, max) = bbox.split_once(';')?;
+    let min = parse_coordinate(min)?;
+    let max = parse_coordinate(max)?;
+    Some((min, max))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn smoke() {
-        tokio::spawn(run(Config {
-            port: 3000,
-            concurrency: 4,
-            valhalla_url: "".into(),
-            valhalla_config_path: None,
-        }));
+    #[test]
+    fn test_parse_bbox() {
+        assert_eq!(
+            parse_bbox("55.0,13.0;56.0,14.0"),
+            Some((LatLon(55.0, 13.0), LatLon(56.0, 14.0)))
+        );
+        assert_eq!(
+            parse_bbox("37.7749,-122.4194;34.0522,-118.2437"),
+            Some((LatLon(37.7749, -122.4194), LatLon(34.0522, -118.2437)))
+        );
+
+        // missing semicolon
+        assert_eq!(parse_bbox("37.7749,-122.4194 34.0522,-118.2437"), None);
+        // missing comma
+        assert_eq!(parse_bbox("37.7749 -122.4194;34.0522,-118.2437"), None);
+        assert_eq!(parse_bbox("37.7749;-122.4194;34.0522,-118.2437"), None);
+        assert_eq!(parse_bbox("37.7749-122.4194;34.0522,-118.2437"), None);
+        assert_eq!(parse_bbox("37.7749,-122.4194;34.0522 -118.2437"), None);
+        assert_eq!(parse_bbox("37.7749,-122.4194;34.0522;-118.2437"), None);
+        assert_eq!(parse_bbox("37.7749,-122.4194;34.0522-118.2437"), None);
+        // not a number
+        assert_eq!(parse_bbox("invalid;34.0522,-118.2437"), None);
+        assert_eq!(parse_bbox("37.7749,invalid;34.0522,-118.2437"), None);
+        assert_eq!(parse_bbox("37.7749,-122.4194;invalid,-118.2437"), None);
+        assert_eq!(parse_bbox("37.7749,-122.4194;34.0522,invalid"), None);
     }
 }

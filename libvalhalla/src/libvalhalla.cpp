@@ -3,7 +3,6 @@
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/config.h>
 #include <valhalla/midgard/encoded.h>
-#include <memory>
 
 namespace baldr = valhalla::baldr;
 namespace midgard = valhalla::midgard;
@@ -64,7 +63,11 @@ rust::vec<TileId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max
   rust::vec<TileId> result;
   result.reserve(tile_ids.size());
   for (auto tile_id : tile_ids) {
-    result.push_back(baldr::GraphId(tile_id, static_cast<uint32_t>(level), 0).value);
+    const baldr::GraphId graph_id(tile_id, static_cast<uint32_t>(level), 0);
+    // List only tiles that we have
+    if (tiles.find(graph_id.Tile_Base()) != tiles.end()) {
+      result.push_back(graph_id.value);
+    }
   }
   return result;
 }
