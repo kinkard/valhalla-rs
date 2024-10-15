@@ -16,8 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   protobuf-compiler \
   zlib1g-dev
 
-ENV CC=clang
-ENV CXX=clang++
+ENV CC=clang CXX=clang++
 
 WORKDIR /usr/src/app
 
@@ -29,15 +28,11 @@ COPY libvalhalla/Cargo.toml ./libvalhalla/
 RUN mkdir -p libvalhalla/src && touch libvalhalla/src/lib.rs
 RUN cargo build --release
 
-# libvalhalla compilation takes a lot, worth to move it into a separate cache layer
-COPY libvalhalla ./libvalhalla
-RUN touch -a -m ./libvalhalla/src/lib.rs
-RUN cargo build --release
-
 # Now build the real target
 COPY src ./src
+COPY libvalhalla ./libvalhalla
 # Update modified attribute as otherwise cargo won't rebuild it
-RUN touch -a -m ./src/main.rs
+RUN touch -a -m ./src/main.rs ./libvalhalla/src/lib.rs
 RUN cargo build --release
 
 FROM debian:bookworm-slim AS runner
