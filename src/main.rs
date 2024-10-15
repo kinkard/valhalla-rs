@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, num::NonZero};
+use std::{collections::HashMap, env, num::NonZero, time::Instant};
 
 use axum::{
     extract::{Path, State},
@@ -129,7 +129,7 @@ async fn forward_request(
     State(state): State<AppState>,
     Json(request): Json<RequestToForward>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    info!("Requested /{}", request.endpoint);
+    let begin = Instant::now();
     let response = state
         .http_client
         .post(format!("{}/{}", state.valhalla_url, request.endpoint))
@@ -137,6 +137,11 @@ async fn forward_request(
         .send()
         .await
         .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()))?;
+    info!(
+        "Fetched /{} in {}ms",
+        request.endpoint,
+        begin.elapsed().as_millis()
+    );
 
     response
         .json()
@@ -163,6 +168,7 @@ async fn traffic(
         ));
     };
 
+    let begin = Instant::now();
     let edges = [GraphLevel::Highway, GraphLevel::Arterial, GraphLevel::Local]
         .into_iter()
         .map(|level| reader.tiles_in_bbox(bbox.0, bbox.1, level))
@@ -182,6 +188,11 @@ async fn traffic(
         })
         .map(|edge| (edge.shape, 10 - (edge.jam_factor * 10.0).round() as i32))
         .collect::<HashMap<_, _>>();
+    info!(
+        "Fetched {} traffic edges in {}ms",
+        edges.len(),
+        begin.elapsed().as_millis()
+    );
     Ok(Json(serde_json::to_value(edges).unwrap()))
 }
 
