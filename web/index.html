@@ -105,44 +105,8 @@
         layout: {},
         paint: {
           "line-color": "#007AFF",
-          "line-width": 7,
+          "line-width": 9,
         }
-      });
-
-      // This source will be filled by data later in the button callback handler
-      map.addSource("expansion", {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [],
-        },
-      });
-      map.addLayer({
-        id: "expansion-edges",
-        type: "line",
-        source: "expansion",
-        layout: {},
-        paint: {
-          "line-color": [
-            "interpolate",
-            ["linear"],
-            ["get", "progress"],
-            0,
-            "#FF4500", // Start color
-            1.0, // progress is changing from 0.0 to 1.0
-            "#45FF00", // End color
-          ],
-          // Interpolate width to show if same line is covered multiple times
-          "line-width": [
-            "interpolate",
-            ["linear"],
-            ["get", "progress"],
-            0,
-            5, // Start width
-            1.0, // progress is changing from 0.0 to 1.0
-            1, // End width
-          ],
-        },
       });
 
       // Source for drawing traffic lines based on information from /locate response
@@ -171,15 +135,43 @@
             10., "#000000", // Black for blocked roads
           ],
           "line-width": 5,
-          // todo: Use different width depending on the edge level
-          // "line-width": [
-          //   "interpolate",
-          //   ["linear"],
-          //   ["get", "jamFactor"],
-          //   0, 2, // Thin lines for free-flowing traffic
-          //   1.0, 6 // Thicker lines for heavy traffic
-          // ],
         }
+      });
+
+      // This source will be filled by data later in the button callback handler
+      map.addSource("expansion", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [],
+        },
+      });
+      map.addLayer({
+        id: "expansion-edges",
+        type: "line",
+        source: "expansion",
+        layout: {},
+        paint: {
+          "line-color": [
+            "interpolate",
+            ["linear"],
+            ["get", "progress"],
+            // From Violet-Pink Gradient color scheme for progress
+            0.0, "#6B0772", // Start color
+            0.5, "#AF1281",
+            1.0, "#CF268A", // End color
+          ],
+          // Interpolate width to show if same line is covered multiple times
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["get", "progress"],
+            0,
+            3, // Start width
+            1.0, // progress is changing from 0.0 to 1.0
+            1, // End width
+          ],
+        },
       });
 
       let locations;
