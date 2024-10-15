@@ -163,13 +163,13 @@ async fn traffic(
         ));
     };
 
-    let edges = [GraphLevel::Arterial, GraphLevel::Highway, GraphLevel::Local]
+    let edges = [GraphLevel::Highway, GraphLevel::Arterial, GraphLevel::Local]
         .into_iter()
         .map(|level| reader.tiles_in_bbox(bbox.0, bbox.1, level))
         // Limit number of traffic tiles we fetch
         .scan(0, |count, tiles| {
             *count += tiles.len();
-            if *count < 12 {
+            if *count < 20 {
                 Some(tiles)
             } else {
                 None
