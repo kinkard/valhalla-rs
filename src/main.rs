@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, num::NonZero, time::Instant};
+use std::{collections::HashMap, env, num::NonZero, sync::Arc, time::Instant};
 
 use axum::{
     extract::{Path, State},
@@ -34,7 +34,7 @@ struct Config {
 #[derive(Clone)]
 struct AppState {
     http_client: reqwest::Client,
-    valhalla_url: String,
+    valhalla_url: Arc<str>,
     graph_reader: Option<libvalhalla::GraphReader>,
 }
 
@@ -64,7 +64,7 @@ async fn run(config: Config) {
         .route("/api/traffic/:bbox", get(traffic))
         .with_state(AppState {
             http_client: reqwest::Client::new(),
-            valhalla_url: config.valhalla_url,
+            valhalla_url: config.valhalla_url.into(),
             graph_reader: config
                 .valhalla_config_path
                 .map(|path| libvalhalla::GraphReader::new(path.into())),
