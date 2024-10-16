@@ -22,6 +22,9 @@ struct Config {
     /// Max threads to use
     #[arg(long, default_value_t = 4)]
     concurrency: u16,
+    /// A common prefix for all routes, useful for resolving route conflicts in multi-service environments
+    #[arg(long, default_value_t = String::default())]
+    route_prefix: String,
     /// Valhalla base url to send requests to
     #[arg(long, default_value = "http://localhost:8002")]
     valhalla_url: String,
@@ -69,11 +72,15 @@ async fn run(config: Config) {
                 .valhalla_config_path
                 .map(|path| libvalhalla::GraphReader::new(path.into())),
         });
+    let app = Router::new().nest(&config.route_prefix, app);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port))
         .await
         .unwrap();
-    info!("Listening at http://localhost:{}", config.port);
+    info!(
+        "Listening at http://localhost:{}{}",
+        config.port, config.route_prefix
+    );
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             tokio::select! {
