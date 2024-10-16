@@ -8,7 +8,26 @@ The tool is straightforward and not particularly user-friendly, but it does allo
 Investigate road graph edges: Right-click on the map to bring up popups with information on the road graph edges that Valhalla is using. Multiple popups can be opened at once.
 - **View current traffic data:** Click the “Show traffic” button to see the current traffic that Valhalla uses. For performance reasons, traffic data is limited in amount; zooming out too far will reduce traffic details and may eventually hide traffic entirely. Keep in mind there are multiple levels of edges (highways, arterials, and local roads), so zooming in further before pressing “Show traffic” will display more details.
 
-This tool expects that Valhalla is available at `http://localhost:8002/` for simplicity, so either run Valhalla locally or tunnel port via ssh to where it run.
+![image](https://github.com/user-attachments/assets/c0040c58-3a1b-4da7-930b-0a90e951d476)
+
+```
+$ ./valhalla-debug --help
+Usage: valhalla-debug [OPTIONS]
+
+Options:
+      --port <PORT>
+          Port to listen [default: 3000]
+      --concurrency <CONCURRENCY>
+          Max threads to use [default: 4]
+      --route-prefix <ROUTE_PREFIX>
+          A common prefix for all routes, useful for resolving route conflicts in multi-service environments [default: ]
+      --valhalla-url <VALHALLA_URL>
+          Valhalla base url to send requests to [default: http://localhost:8002]
+      --valhalla-config-path <VALHALLA_CONFIG_PATH>
+          Path to valhalla json config file. Required for an access to valhalla graph information
+  -h, --help
+          Print help
+```
 
 ## Build & Run
 
