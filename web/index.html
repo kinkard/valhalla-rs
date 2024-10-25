@@ -55,12 +55,43 @@
       max-height: 400px;
       overflow-y: auto;
     }
+
+    .locations-container {
+      width: 100%;
+      height: 200px;
+      border: 1px solid #ccc;
+      overflow-y: auto;
+      padding: 5px;
+      box-sizing: border-box;
+    }
+
+    .location-row {
+      display: flex;
+    }
+
+    .location-row input {
+      height: 24px;
+      margin-right: 5px;
+    }
+
+    .location-row span {
+      cursor: pointer;
+      font-size: 1.5em;
+      line-height: 1;
+    }
+
+    .location-row .draggable-indicator {
+      cursor: move;
+      display: flex;
+      margin-right: 5px;
+      line-height: 1;
+    }
   </style>
 </head>
 
 <body>
   <div id="sidebar">
-    <textarea id="locations" rows="6" placeholder="Enter locations JSON here... or click on the map"></textarea>
+    <div id="locations-container" class="locations-container" contenteditable="true"></div>
     <textarea id="parameters" rows="25" placeholder="Enter parameters JSON here...">
 {"units":"kilometers", "costing":"auto","costing_options":{"auto":{"maneuver_penalty":5,"country_crossing_penalty":0,"country_crossing_cost":600,"width":1.6,"height":1.9,"use_highways":1,"use_tolls":1,"use_ferry":1,"ferry_cost":300,"use_living_streets":0.5,"use_tracks":0,"private_access_penalty":450,"ignore_closures":false,"ignore_restrictions":false,"ignore_access":false,"closure_factor":9,"service_penalty":15,"service_factor":1,"exclude_unpaved":1,"shortest":false,"exclude_cash_only_tolls":false,"top_speed":140,"fixed_speed":0,"toll_booth_penalty":0,"toll_booth_cost":15,"gate_penalty":300,"gate_cost":30,"include_hov2":false,"include_hov3":false,"include_hot":false,"disable_hierarchy_pruning":false}}}</textarea>
     <div>
@@ -177,14 +208,6 @@
         },
       });
 
-      let locations;
-      try {
-        locations = JSON.parse(document.getElementById("locations").value);
-      } catch (e) {
-        locations = []
-      }
-      showMarkers(locations);
-
       // Function to update the visibility of lines based on slider value
       const showLinesForProgress = (progress) => {
         map.setFilter("expansion-edges", ["<=", ["get", "progress"], progress]);
@@ -243,14 +266,12 @@
 
       document.getElementById("do-route").addEventListener("click", () => {
         const errorMessage = document.getElementById("error-message");
+        const locations = locationsManager.locations;
 
-        let locations;
-        try {
-          locations = JSON.parse(document.getElementById("locations").value);
-        } catch (e) {
-          locations = []
+        if (locations.length < 2) {
+          errorMessage.textContent = "At least 2 locations are required";
+          return;
         }
-        showMarkers(locations);
 
         // clear the previous lines to clearly indicate that new request is in progress
         map.getSource("expansion").setData({
@@ -268,11 +289,6 @@
         });
 
         document.getElementById("route-summary").textContent = "";
-
-        if (locations.length < 2) {
-          errorMessage.textContent = "At least 2 locations is required";
-          return;
-        }
 
         sendValhallaRequest("route", locations, {})
           .then((response) => response.json())
@@ -304,25 +320,18 @@
 
       document.getElementById("do-expansion").addEventListener("click", () => {
         const errorMessage = document.getElementById("error-message");
+        const locations = locationsManager.locations;
 
-        let locations;
-        try {
-          locations = JSON.parse(document.getElementById("locations").value);
-        } catch (e) {
-          locations = []
+        if (locations.length < 2) {
+          errorMessage.textContent = "At least 2 locations are required";
+          return;
         }
-        showMarkers(locations);
 
         // clear the previous lines to clearly indicate that new request is in progress
         map.getSource("expansion").setData({
           type: "FeatureCollection",
           features: [],
         });
-
-        if (locations.length < 2) {
-          errorMessage.textContent = "At least 2 locations is required";
-          return;
-        }
 
         document.getElementById("edges-count").textContent = "Exploring...";
         sendValhallaRequest("expansion", locations, { action: "route" })
@@ -419,36 +428,6 @@
         }),
       });
     }
-
-    function showMarkers(locations) {
-      // Remove existing markers
-      document.querySelectorAll(".mapboxgl-marker").forEach((marker) => marker.remove());
-
-      locations.forEach((location, index) => {
-        const color = index === 0 ? "green" : index === locations.length - 1 ? "red" : "gray";
-        const marker = new mapboxgl.Marker({ color: color, draggable: true }).setLngLat([location.lon, location.lat]).addTo(map);
-        marker.on('dragend', () => {
-          const newCoords = marker.getLngLat();
-
-          const locations = JSON.parse(document.getElementById("locations").value || '[]');
-          locations[index].lon = newCoords.lng;
-          locations[index].lat = newCoords.lat;
-          displayLocations(locations);
-        });
-      });
-      displayLocations(locations);
-    }
-
-    map.on('click', (e) => {
-      const locations = JSON.parse(document.getElementById("locations").value || '[]');
-      const newLocation = {
-        lon: e.lngLat.lng,
-        lat: e.lngLat.lat,
-        type: 'break'
-      };
-      locations.push(newLocation);
-      showMarkers(locations);
-    });
 
     function displayLocations(locations) {
       document.getElementById("locations").value = JSON.stringify(locations, function (key, value) {
@@ -570,6 +549,103 @@
         };
       });
     }
+
+    // Class that manages locations and markers and updates them and UI on every change
+    class LocationsManager {
+      constructor(map) {
+        this.map = map;
+        this.locations = [];
+        this.markers = [];
+        this.containerElement = document.getElementById("locations-container");
+        this.init();
+      }
+
+      init() {
+        this.containerElement.addEventListener("click", (e) => {
+          if (e.target === this.containerElement) {
+            this.addLocation();
+          }
+        });
+        this.map.on('click', (e) => this.addLocationFromMap(e.lngLat));
+        this.containerElement.addEventListener("input", (e) => this.updateLocationFromList(e));
+        this.containerElement.addEventListener("dragstart", (e) => this.dragStart(e));
+        this.containerElement.addEventListener("dragover", (e) => this.dragOver(e));
+        this.containerElement.addEventListener("drop", (e) => this.drop(e));
+      }
+
+      addLocationFromMap(lngLat) {
+        const newLocation = { lon: lngLat.lng.toFixed(6), lat: lngLat.lat.toFixed(6), type: 'break' };
+        this.locations.push(newLocation);
+        this.updateUI();
+      }
+
+      addLocation() {
+        const center = this.map.getCenter();
+        const newLocation = { lon: center.lng.toFixed(6), lat: center.lat.toFixed(6), type: 'break' };
+        this.locations.push(newLocation);
+        this.updateUI();
+      }
+
+      updateLocationFromList(e) {
+        const index = e.target.dataset.index;
+        const [lat, lon] = e.target.value.split(',').map(Number);
+        this.locations[index] = { lon: lon.toFixed(6), lat: lat.toFixed(6), type: 'break' };
+        this.updateMarkers();
+      }
+
+      updateMarkers() {
+        this.markers.forEach(marker => marker.remove());
+        this.markers = this.locations.map((location, index) => {
+          const color = index === 0 ? "green" : index === this.locations.length - 1 ? "red" : "gray";
+          const marker = new mapboxgl.Marker({ color: color, draggable: true })
+            .setLngLat([location.lon, location.lat])
+            .addTo(this.map);
+          marker.on('dragend', () => {
+            const newCoords = marker.getLngLat();
+            this.locations[index] = { lon: newCoords.lng.toFixed(6), lat: newCoords.lat.toFixed(6), type: 'break' };
+            this.updateUI();
+          });
+          return marker;
+        });
+      }
+
+      updateUI() {
+        this.containerElement.innerHTML = this.locations.map((location, index) => `
+      <div data-index="${index}" class="location-row" draggable="true">
+        <span class="draggable-indicator" data-index="${index}">≡</span>
+        <input type="text" data-index="${index}" value="${location.lat},${location.lon}" />
+        <span data-index="${index}" onclick="locationsManager.removeLocation(${index})">✖</span>
+      </div>
+    `).join('');
+        this.updateMarkers();
+      }
+
+      removeLocation(index) {
+        this.locations.splice(index, 1);
+        this.updateUI();
+      }
+
+      dragStart(e) {
+        if (e.target.classList.contains('draggable-indicator')) {
+          e.dataTransfer.setData("text/plain", e.target.dataset.index);
+        }
+      }
+
+      dragOver(e) {
+        e.preventDefault();
+      }
+
+      drop(e) {
+        e.preventDefault();
+        const fromIndex = e.dataTransfer.getData("text/plain");
+        const toIndex = e.target.closest('div').dataset.index;
+        const [movedItem] = this.locations.splice(fromIndex, 1);
+        this.locations.splice(toIndex, 0, movedItem);
+        this.updateUI();
+      }
+    }
+
+    const locationsManager = new LocationsManager(map);
   </script>
 </body>
 
