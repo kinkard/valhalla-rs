@@ -74,6 +74,10 @@
       margin-right: 5px;
     }
 
+    .bad-input {
+      background-color: #ffcccc;
+    }
+
     .location-row span {
       cursor: pointer;
       font-size: 1.5em;
@@ -588,7 +592,19 @@
 
       updateLocationFromList(e) {
         const index = e.target.dataset.index;
-        const [lat, lon] = e.target.value.split(',').map(Number);
+        const parts = value.split(',');
+        if (parts.length !== 2) {
+          e.target.closest('.location-row').classList.add('bad-input');
+          return;
+        }
+
+        const [lat, lon] = parts.map(Number);
+        if (isNaN(lat) || isNaN(lon)) {
+          e.target.closest('.location-row').classList.add('bad-input');
+          return;
+        }
+
+        e.target.closest('.location-row').classList.remove('bad-input');
         this.locations[index] = { lon: lon.toFixed(6), lat: lat.toFixed(6), type: 'break' };
         this.updateMarkers();
       }
