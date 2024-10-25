@@ -19,7 +19,7 @@ lto = "thin"
 
 [dependencies]
 axum = "0.7"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 libvalhalla = { path = "libvalhalla" }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
