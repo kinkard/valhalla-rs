@@ -639,6 +639,19 @@
       removeLocation(index) {
         this.locations.splice(index, 1);
         this.updateUI();
+
+        // Reset route and expansion graph if waypoints are removed
+        map.getSource("expansion").setData({
+          type: "FeatureCollection",
+          features: [],
+        });
+        map.getSource("route").setData({
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: []
+          }
+        });
       }
 
       dragStart(e) {
