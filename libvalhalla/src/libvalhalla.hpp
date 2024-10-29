@@ -22,10 +22,12 @@ enum class GraphLevel : uint8_t {
 /// Subset of data stored in [`valhalla::baldr::DirectedEdge`] and [`valhalla::baldr::EdgeInfo`] that is exposed to Rust
 struct TrafficEdge {
   std::string shape_;
-  float jam_factor_;
+  float normalized_speed_;
 
+  /// Polyline6 encoded shape of the flow
   const std::string & shape() const { return shape_; }
-  float jam_factor() const { return jam_factor_; }
+  /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
+  float normalized_speed() const { return normalized_speed_; }
 };
 
 /// Exposed internal [`valhalla::baldr::GraphReader::tile_extract_t`], used to

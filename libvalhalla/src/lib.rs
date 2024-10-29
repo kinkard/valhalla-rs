@@ -14,8 +14,10 @@ mod ffi {
         include!("libvalhalla/src/libvalhalla.hpp");
 
         type TrafficEdge;
+        /// Polyline6 encoded shape of the edge
         fn shape(self: &TrafficEdge) -> &CxxString;
-        fn jam_factor(self: &TrafficEdge) -> f32;
+        /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
+        fn normalized_speed(self: &TrafficEdge) -> f32;
 
         type GraphLevel;
 
@@ -47,10 +49,10 @@ pub struct TileId(pub u64);
 
 /// Representation of the road graph edge with traffic information
 pub struct TrafficEdge {
-    /// Polyline6 encoded shape of the flow.
+    /// Polyline6 encoded shape of the flow
     pub shape: String,
-    /// Ration between live speed and speed limit (or default edge speed if speed limit is unavailable).
-    pub jam_factor: f32,
+    /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
+    pub normalized_speed: f32,
 }
 
 #[derive(Clone)]
@@ -80,7 +82,7 @@ impl GraphReader {
             .into_iter()
             .map(|flow| TrafficEdge {
                 shape: flow.shape().to_string(),
-                jam_factor: flow.jam_factor(),
+                normalized_speed: flow.normalized_speed(),
             })
             .collect()
     }

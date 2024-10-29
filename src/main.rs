@@ -198,7 +198,13 @@ async fn traffic(
             // todo: this is really heavy compute operation
             reader.get_tile_traffic_flows(tile_id)
         })
-        .map(|edge| (edge.shape, 10 - (edge.jam_factor * 10.0).round() as i32))
+        .map(|edge| {
+            (
+                edge.shape,
+                // Convert normalized speed [0.0, 1.0] to a jam factor [10.0, 0.0]
+                10 - (edge.normalized_speed * 10.0).round() as i32,
+            )
+        })
         .collect::<HashMap<_, _>>();
     info!(
         "Fetched {} traffic edges in {}ms",

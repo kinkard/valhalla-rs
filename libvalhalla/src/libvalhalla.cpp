@@ -86,23 +86,26 @@ std::unique_ptr<std::vector<TrafficEdge>> TileSet::get_tile_traffic(TileId id) c
   flows.reserve(traffic_tile.header->directed_edge_count);
   for (uint32_t i = 0; i < traffic_tile.header->directed_edge_count; ++i) {
     const volatile auto & live_speed = traffic_tile.speeds[i];
-    if (live_speed.speed_valid() && live_speed.get_overall_speed() > 0) {
+    if (live_speed.speed_valid()) {
       const auto * de = tile->directededge(i);
       const auto edge_info = tile->edgeinfo(de);
 
-      uint32_t speed = tile->GetSpeed(de, baldr::kDefaultFlowMask);
-
-      uint32_t road_speed = 0;
-      for (const uint32_t speed : { edge_info.speed_limit(), de->free_flow_speed(), de->speed() }) {
-        road_speed = speed;
-        if (speed != 0 && speed != baldr::kUnlimitedSpeedLimit) {
-          break;
+      float normalized_speed = 0.0;
+      if (!live_speed.closed()) {
+        const uint32_t speed = tile->GetSpeed(de, baldr::kDefaultFlowMask);
+        uint32_t road_speed = 0;
+        for (const uint32_t speed : { edge_info.speed_limit(), de->free_flow_speed(), de->speed() }) {
+          road_speed = speed;
+          if (speed != 0 && speed != baldr::kUnlimitedSpeedLimit) {
+            break;
+          }
         }
+        normalized_speed = static_cast<float>(speed) / road_speed;
       }
 
       flows.push_back({
           .shape_ = midgard::encode(edge_info.shape()),
-          .jam_factor_ = static_cast<float>(speed) / road_speed,
+          .normalized_speed_ = normalized_speed,
       });
     }
   }
