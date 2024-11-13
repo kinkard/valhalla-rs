@@ -109,6 +109,7 @@
         <textarea id="route-summary" rows="11" cols="50"></textarea>
       </div>
       <button id="do-traffic">Show traffic</button>
+      <button id="do-clear">Clear</button>
     </div>
     <div id="error-message"></div>
   </div>
@@ -403,6 +404,26 @@
             errorMessage.textContent = "Bad /api/traffic/ response: " + err;
           });;
       });
+
+      document.getElementById("do-clear").addEventListener("click", () => {
+        map.getSource("route").setData({
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: []
+          }
+        });
+        map.getSource("expansion").setData({
+          type: "FeatureCollection",
+          features: [],
+        });
+        map.getSource("traffic-lines").setData({
+          type: "FeatureCollection",
+          features: [],
+        });
+        document.getElementById("route-summary").textContent = "";
+        document.getElementById("error-message").textContent = "";
+      })
     });
 
     function sendValhallaRequest(endpoint, locations, addons) {
