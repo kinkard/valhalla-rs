@@ -371,7 +371,8 @@
         const bounds = map.getBounds();
         const bbox = `${bounds.getSouth()},${bounds.getWest()};${bounds.getNorth()},${bounds.getEast()}`;
         // todo: probably we want to limit road graph level based on a zoom level
-        fetch(`${window.location.href}/api/traffic/${bbox}`, {
+        const url = new URL(`/api/traffic/${bbox}`, window.location.href);
+        fetch(url.toString(), {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -438,7 +439,8 @@
         return;
       }
 
-      return fetch(`${window.location.href}/api/request`, {
+      const url = new URL('/api/request', window.location.href);
+      return fetch(url.toString(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
