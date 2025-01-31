@@ -19,8 +19,8 @@ Options:
           Port to listen [default: 3000]
       --concurrency <CONCURRENCY>
           Max threads to use [default: 4]
-      --route-prefix <ROUTE_PREFIX>
-          A common prefix for all routes, useful for resolving route conflicts in multi-service environments [default: ]
+      --mapbox-access-token <MAPBOX_ACCESS_TOKEN>
+          Mapbox access token to use in the frontend [env: MAPBOX_ACCESS_TOKE]
       --valhalla-url <VALHALLA_URL>
           Valhalla base url to send requests to [default: http://localhost:8002]
       --valhalla-config-path <VALHALLA_CONFIG_PATH>

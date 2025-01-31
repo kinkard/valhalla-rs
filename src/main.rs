@@ -25,9 +25,6 @@ struct Config {
     /// Mapbox access token to use in the frontend
     #[arg(long, env)]
     mapbox_access_token: String,
-    /// A common prefix for all routes, useful for resolving route conflicts in multi-service environments
-    #[arg(long, default_value_t = String::default())]
-    route_prefix: String,
     /// Valhalla base url to send requests to
     #[arg(long, default_value = "http://localhost:8002")]
     valhalla_url: String,
@@ -77,15 +74,11 @@ async fn run(config: Config) {
                 .valhalla_config_path
                 .map(|path| libvalhalla::GraphReader::new(path.into())),
         });
-    let app = Router::new().nest(&config.route_prefix, app);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port))
         .await
         .unwrap();
-    info!(
-        "Listening at http://localhost:{}{}",
-        config.port, config.route_prefix
-    );
+    info!("Listening at http://localhost:{}", config.port);
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             tokio::select! {
@@ -141,21 +134,21 @@ async fn forward_request(
     State(state): State<AppState>,
     Json(request): Json<RequestToForward>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let url = format!("{}/{}", state.valhalla_url, request.endpoint);
     let begin = Instant::now();
     let response = state
         .http_client
-        .post(format!("{}/{}", state.valhalla_url, request.endpoint))
+        .post(&url)
         .json(&request.payload)
         .send()
-        .await
-        .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()))?;
+        .await;
     info!(
-        "Fetched /{} in {}ms",
-        request.endpoint,
+        "Fetched data from {url} in {}ms",
         begin.elapsed().as_millis()
     );
 
     response
+        .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()))?
         .json()
         .await
         .map(Json)
