@@ -177,6 +177,30 @@
         }
       });
 
+      map.addSource("locate-edge", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: []
+          }
+        }
+      });
+      map.addLayer({
+        id: "locate-edge",
+        type: "line",
+        source: "locate-edge",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#E60001",
+          "line-width": 5,
+        }
+      });
+
       // This source will be filled by data later in the button callback handler
       map.addSource("expansion", {
         type: "geojson",
@@ -251,14 +275,15 @@
             const popupContent = `<div class="popup-content">
                   <pre>${JSON.stringify(edge, null, 2)}</pre>
               </div>`;
-
             new mapboxgl.Popup().setLngLat(popup_coord).setHTML(popupContent).addTo(map);
 
-            // // Update the traffic-lines source with the new data
-            // map.getSource("traffic-lines").setData({
-            //   type: "FeatureCollection",
-            //   features: data[0]["edges"].map(to_traffic_flow).filter(flow => flow !== null).flat(),
-            // });
+            map.getSource("locate-edge").setData({
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: decodePolyline6(edge["edge_info"]["shape"]),
+              }
+            });
           })
           .catch((err) => {
             console.error("Bad /locate response: ", err);
@@ -412,6 +437,13 @@
           geometry: {
             type: "LineString",
             coordinates: []
+          }
+        });
+        map.getSource("locate-edge").setData({
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [],
           }
         });
         map.getSource("expansion").setData({
