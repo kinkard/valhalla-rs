@@ -2,16 +2,14 @@
 name = "valhalla-debug"
 description = "Debug tool for Valhalla routing engine"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["kinkard"]
 repository = "https://github.com/kinkard/valhalla-debug"
 
 [workspace]
 resolver = "2"
-members = [
-    "libvalhalla",
-]
+members = ["libvalhalla"]
 
 [profile.release]
 strip = true
