@@ -1,4 +1,5 @@
 #include "libvalhalla.hpp"
+#include "libvalhalla/src/lib.rs.h"
 
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/config.h>
@@ -72,7 +73,7 @@ rust::vec<TileId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max
   return result;
 }
 
-std::unique_ptr<std::vector<TrafficEdge>> TileSet::get_tile_traffic(TileId id) const {
+rust::Vec<TrafficEdge> TileSet::get_tile_traffic(TileId id) const {
   auto tile = get_tile(*this, baldr::GraphId(id));
   if (!tile) {
     return {};
@@ -82,7 +83,7 @@ std::unique_ptr<std::vector<TrafficEdge>> TileSet::get_tile_traffic(TileId id) c
     return {};
   }
 
-  std::vector<TrafficEdge> flows;
+  rust::Vec<TrafficEdge> flows;
   flows.reserve(traffic_tile.header->directed_edge_count);
   for (uint32_t i = 0; i < traffic_tile.header->directed_edge_count; ++i) {
     const volatile auto & live_speed = traffic_tile.speeds[i];
@@ -103,11 +104,11 @@ std::unique_ptr<std::vector<TrafficEdge>> TileSet::get_tile_traffic(TileId id) c
         normalized_speed = static_cast<float>(speed) / road_speed;
       }
 
-      flows.push_back({
-          .shape_ = midgard::encode(edge_info.shape()),
-          .normalized_speed_ = normalized_speed,
+      flows.push_back(TrafficEdge{
+          .shape = midgard::encode(edge_info.shape()),
+          .normalized_speed = normalized_speed,
       });
     }
   }
-  return std::make_unique<std::vector<TrafficEdge>>(std::move(flows));
+  return flows;
 }

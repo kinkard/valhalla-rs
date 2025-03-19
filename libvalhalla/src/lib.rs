@@ -10,14 +10,18 @@ mod ffi {
         Local,
     }
 
+    /// Representation of the road graph edge with traffic information that contains a subset of
+    /// data stored in [`valhalla::baldr::DirectedEdge`] and [`valhalla::baldr::EdgeInfo`] that
+    /// is exposed to Rust.
+    struct TrafficEdge {
+        /// Polyline6 encoded shape of the edge
+        shape: String,
+        /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
+        normalized_speed: f32,
+    }
+
     unsafe extern "C++" {
         include!("libvalhalla/src/libvalhalla.hpp");
-
-        type TrafficEdge;
-        /// Polyline6 encoded shape of the edge
-        fn shape(self: &TrafficEdge) -> &CxxString;
-        /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
-        fn normalized_speed(self: &TrafficEdge) -> f32;
 
         type GraphLevel;
 
@@ -31,7 +35,7 @@ mod ffi {
             max_lon: f32,
             level: GraphLevel,
         ) -> Vec<u64>;
-        fn get_tile_traffic(self: &TileSet, id: u64) -> UniquePtr<CxxVector<TrafficEdge>>;
+        fn get_tile_traffic(self: &TileSet, id: u64) -> Vec<TrafficEdge>;
     }
 }
 
@@ -47,13 +51,7 @@ pub struct LatLon(pub f32, pub f32);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TileId(pub u64);
 
-/// Representation of the road graph edge with traffic information
-pub struct TrafficEdge {
-    /// Polyline6 encoded shape of the flow
-    pub shape: String,
-    /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
-    pub normalized_speed: f32,
-}
+pub use ffi::TrafficEdge;
 
 #[derive(Clone)]
 pub struct GraphReader {
@@ -77,13 +75,6 @@ impl GraphReader {
     }
 
     pub fn get_tile_traffic_flows(&self, id: TileId) -> Vec<TrafficEdge> {
-        self.tileset
-            .get_tile_traffic(id.0)
-            .into_iter()
-            .map(|flow| TrafficEdge {
-                shape: flow.shape().to_string(),
-                normalized_speed: flow.normalized_speed(),
-            })
-            .collect()
+        self.tileset.get_tile_traffic(id.0)
     }
 }

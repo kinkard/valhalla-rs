@@ -11,3 +11,6 @@ cxx = "1.0"
 [build-dependencies]
 cmake = "0.1"
 cxx-build = "1.0"
+# For compile_commands.json parsing
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

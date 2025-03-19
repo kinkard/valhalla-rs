@@ -4,10 +4,9 @@
 
 #include <memory>
 #include <unordered_map>
-#include <vector>
 
 namespace valhalla::midgard {
-class tar;
+struct tar;
 }
 
 /// Use primitive type instead of [`valhalla::baldr::GraphId`] to simplify Rust bindings
@@ -19,16 +18,7 @@ enum class GraphLevel : uint8_t {
   Local = 2,
 };
 
-/// Subset of data stored in [`valhalla::baldr::DirectedEdge`] and [`valhalla::baldr::EdgeInfo`] that is exposed to Rust
-struct TrafficEdge {
-  std::string shape_;
-  float normalized_speed_;
-
-  /// Polyline6 encoded shape of the flow
-  const std::string & shape() const { return shape_; }
-  /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
-  float normalized_speed() const { return normalized_speed_; }
-};
+struct TrafficEdge;
 
 /// Exposed internal [`valhalla::baldr::GraphReader::tile_extract_t`], used to
 /// access exact graph and traffic tiles. Create it using [`new_tileset()`].
@@ -43,8 +33,8 @@ struct TileSet {
   std::shared_ptr<valhalla::midgard::tar> traffic_archive;
   uint64_t checksum;
 
-  rust::vec<TileId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon, GraphLevel level) const;
-  std::unique_ptr<std::vector<TrafficEdge>> get_tile_traffic(TileId id) const;
+  rust::Vec<TileId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon, GraphLevel level) const;
+  rust::Vec<TrafficEdge> get_tile_traffic(TileId id) const;
 };
 
 /// Creates a new [`TileSet`] instance based on a Valhalla's config json file

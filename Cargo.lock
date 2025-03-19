@@ -831,6 +831,8 @@ dependencies = [
  "cmake",
  "cxx",
  "cxx-build",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
