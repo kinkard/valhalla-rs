@@ -1,11 +1,11 @@
 use std::{collections::HashMap, num::NonZero, sync::Arc, time::Instant};
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     response::Html,
     routing::{get, post},
-    Json, Router,
 };
 use clap::Parser;
 use libvalhalla::{GraphLevel, LatLon};
@@ -180,11 +180,7 @@ async fn traffic(
         // Limit number of traffic tiles we fetch
         .scan(0, |count, tiles| {
             *count += tiles.len();
-            if *count < 20 {
-                Some(tiles)
-            } else {
-                None
-            }
+            if *count < 20 { Some(tiles) } else { None }
         })
         .flatten()
         .flat_map(|tile_id| {
