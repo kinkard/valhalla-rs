@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use miniserde::{Deserialize, json};
 use std::path::Path;
 
 fn main() {
@@ -61,7 +61,7 @@ fn extract_includes(compile_commands: &Path, cpp_source: &str) -> Vec<String> {
     let content =
         std::fs::read_to_string(compile_commands).expect("Failed to read compile_commands.json");
     let commands: Vec<CompileCommand> =
-        serde_json::from_str(&content).expect("Failed to parse compile_commands.json");
+        json::from_str(&content).expect("Failed to parse compile_commands.json");
 
     let command = commands
         .into_iter()
