@@ -1,11 +1,15 @@
 fn main() {
+    let build_type = if matches!(std::env::var("PROFILE"), Ok(profile) if profile == "debug") {
+        "Debug"
+    } else {
+        "Release"
+    };
+    let cores = std::thread::available_parallelism().unwrap().get();
+
     // Build & link required Valhalla libraries
     let dst = cmake::Config::new("./")
-        .define("CMAKE_BUILD_TYPE", "Release")
-        .build_arg(format!(
-            "-j{}",
-            std::thread::available_parallelism().unwrap().get()
-        ))
+        .define("CMAKE_BUILD_TYPE", build_type)
+        .build_arg(format!("-j{cores}"))
         .build();
     let dst = dst.display();
 

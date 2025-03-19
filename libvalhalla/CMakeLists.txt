@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Enable link-time optimization only in Release configuration to have reasonable compile times in Debug
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
 include(CheckCXXCompilerFlag)
 
 # Clang warning documentation - https://clang.llvm.org/docs/DiagnosticsReference.html
