@@ -141,6 +141,7 @@ dependencies = [
  "cxx",
  "cxx-build",
  "miniserde",
+ "pkg-config",
 ]
 
 [[package]]
@@ -173,6 +174,12 @@ dependencies = [
  "mini-internal",
  "ryu",
 ]
+
+[[package]]
+name = "pkg-config"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "proc-macro2"
