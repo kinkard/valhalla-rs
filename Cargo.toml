@@ -1,27 +1,17 @@
 [package]
-name = "valhalla-debug"
-description = "Debug tool for Valhalla routing engine"
+name = "libvalhalla"
 version = "0.1.0"
 edition = "2024"
-license = "MIT OR Apache-2.0"
-authors = ["kinkard"]
+rust-version = "1.85"
+description = "Rust bindings for Valhalla routing engine"
+readme = "README.md"
 repository = "https://github.com/kinkard/valhalla-debug"
-
-[workspace]
-resolver = "2"
-members = ["libvalhalla"]
-
-[profile.release]
-strip = true
-lto = "thin"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
-axum = "0.7"
-clap = { version = "4.5", features = ["derive", "env"] }
-libvalhalla = { path = "libvalhalla" }
-reqwest = { version = "0.12", features = ["json"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "fs", "signal"] }
-tracing = "0.1"
-tracing-subscriber = "0.3"
+cxx = "1.0"
+
+[build-dependencies]
+cmake = "0.1"
+cxx-build = "1.0"
+miniserde = "0.1" # For compile_commands.json parsing
