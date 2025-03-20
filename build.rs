@@ -10,7 +10,7 @@ fn main() {
     let cores = std::thread::available_parallelism().unwrap().get();
 
     // Build & link required Valhalla libraries
-    let dst = cmake::Config::new("./valhalla/")
+    let dst = cmake::Config::new("valhalla")
         .define("CMAKE_BUILD_TYPE", build_type)
         .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON") // Required to extract include paths
         // Enable link-time optimization only in Release configuration to have reasonable compile times in Debug
