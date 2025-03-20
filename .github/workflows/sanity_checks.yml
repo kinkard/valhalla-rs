@@ -9,6 +9,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
       # For some reason GCC fails to compile valhalla so we use clang instead that we
       # install together with all Valhalla dependencies
