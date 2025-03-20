@@ -7,7 +7,7 @@ C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) to acc
 As Valhalla heavilly relies on system libraries, you need to install the following dependencies to build this project:
 
 ```sh
-sudo apt-get update && sudo apt-get install -y --no-install-recommends clang build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
+sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
 ```
 
 ## License
