@@ -2,6 +2,14 @@
 
 C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) to access road graph tiles, powered by [cxx](http://cxx.rs).
 
+## Dependencies
+
+As Valhalla heavilly relies on system libraries, you need to install the following dependencies to build this project:
+
+```sh
+sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
+```
+
 ## License
 
 All code in this project is dual-licensed under either:
