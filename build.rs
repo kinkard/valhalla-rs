@@ -13,11 +13,11 @@ fn main() {
     let dst = cmake::Config::new("valhalla")
         .define("CMAKE_BUILD_TYPE", build_type)
         .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON") // Required to extract include paths
-        // Enable link-time optimization only in Release configuration to have reasonable compile times in Debug
-        .define(
-            "CMAKE_INTERPROCEDURAL_OPTIMIZATION",
-            if build_type == "Release" { "ON" } else { "OFF" },
-        )
+        // // Enable link-time optimization only in Release configuration to have reasonable compile times in Debug
+        // .define(
+        //     "CMAKE_INTERPROCEDURAL_OPTIMIZATION",
+        //     if build_type == "Release" { "ON" } else { "OFF" },
+        // )
         // Disable everything we don't need to reduce number of system dependencies and speed up compilation
         .define("ENABLE_TOOLS", "OFF")
         .define("ENABLE_DATA_TOOLS", "OFF")
