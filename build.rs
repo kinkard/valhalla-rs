@@ -7,7 +7,6 @@ fn main() {
     } else {
         "Release"
     };
-    let cores = std::thread::available_parallelism().unwrap().get();
 
     // Build & link required Valhalla libraries
     let dst = cmake::Config::new("valhalla")
@@ -26,7 +25,6 @@ fn main() {
         .define("ENABLE_PYTHON_BINDINGS", "OFF")
         .define("ENABLE_TESTS", "OFF")
         .define("ENABLE_GDAL", "OFF")
-        .build_arg(format!("-j{cores}"))
         .build_target("valhalla")
         .build();
 
