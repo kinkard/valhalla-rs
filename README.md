@@ -10,6 +10,8 @@ As Valhalla heavilly relies on system libraries, you need to install the followi
 sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
 ```
 
+You can use the provided [Dockerfile](Dockerfile) as a reference for projects that want to use libvalhalla. It demonstrates the necessary dependencies and environment setup.
+
 ## License
 
 All code in this project is dual-licensed under either:
