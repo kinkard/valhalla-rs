@@ -59,11 +59,17 @@ pub struct GraphReader {
 }
 
 impl GraphReader {
-    pub fn new(config_file: PathBuf) -> Self {
+    pub fn new(config_file: PathBuf) -> Option<Self> {
         cxx::let_cxx_string!(cxx_str = config_file.as_os_str().as_bytes());
-        Self {
-            tileset: ffi::new_tileset(&cxx_str).unwrap(),
-        }
+        let tileset = match ffi::new_tileset(&cxx_str) {
+            Ok(tileset) => tileset,
+            Err(err) => {
+                println!("Failed to load tileset: {err:#}");
+                return None;
+            }
+        };
+
+        Some(Self { tileset })
     }
 
     pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<TileId> {
