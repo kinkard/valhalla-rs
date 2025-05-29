@@ -15,4 +15,4 @@ cxx = "1.0"
 cmake = "0.1"
 cxx-build = "1.0"
 miniserde = "0.1"     # For compile_commands.json parsing
-pkg-config = "0.3.32"
+pkg-config = "0.3"
