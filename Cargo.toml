@@ -9,7 +9,7 @@ repository = "https://github.com/kinkard/valhalla-debug"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-cxx = "1.0"
+cxx = { version = "1.0", features = ["c++17"] }
 
 [build-dependencies]
 cmake = "0.1"
