@@ -13,6 +13,6 @@ jobs:
       - name: Build and test
         uses: docker/build-push-action@v6
         with:
-          file: Dockerfile.test
+          file: Dockerfile
           cache-from: type=gha
           cache-to: type=gha,mode=max
