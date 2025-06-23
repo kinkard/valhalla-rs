@@ -25,6 +25,8 @@ fn main() {
         .define("ENABLE_PYTHON_BINDINGS", "OFF")
         .define("ENABLE_TESTS", "OFF")
         .define("ENABLE_GDAL", "OFF")
+        // Switch `graph_tile_ptr` to `std::shared_ptr` that together with cxx `SharedPtr` allows to use `GraphTile` in Rust
+        .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", "ON")
         .build_target("valhalla")
         .build();
 
@@ -44,6 +46,8 @@ fn main() {
         .file("src/libvalhalla.cpp")
         .std("c++17")
         .includes(valhalla_includes)
+        // Should be defined to have consistent behavior with valhalla tile ref definition
+        .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", None)
         .compile("libvalhalla-cxxbridge");
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=src/libvalhalla.hpp");

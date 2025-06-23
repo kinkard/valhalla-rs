@@ -17,22 +17,6 @@ struct GraphMemory : public baldr::GraphMemory {
   }
 };
 
-/// Part of the [`baldr::GraphReader::GetGraphTile()`] that gets tile
-/// from mmap file
-baldr::graph_tile_ptr get_tile(const TileSet & tileset, baldr::GraphId graphid) {
-  auto base = graphid.Tile_Base();
-
-  // We need both graph and traffic tiles to be loaded
-  auto tile_it = tileset.tiles.find(base);
-  auto traffic_it = tileset.traffic_tiles.find(base);
-  if (tile_it == tileset.tiles.end() || traffic_it == tileset.traffic_tiles.end()) {
-    return nullptr;
-  }
-
-  // This initializes the tile from mmap
-  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tile_it->second),
-                                  std::make_unique<GraphMemory>(traffic_it->second));
-}
 }  // namespace
 
 TileSet::~TileSet() {}
@@ -56,29 +40,42 @@ std::shared_ptr<TileSet> new_tileset(const std::string & config_file) {
   return std::make_shared<TileSet>(TileSetReader::create(config.get_child("mjolnir")));
 }
 
-rust::vec<TileId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
-                                         GraphLevel level) const {
+rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
+                                                 GraphLevel level) const {
   const midgard::AABB2<midgard::PointLL> bbox(min_lon, min_lat, max_lon, max_lat);
   const auto tile_ids = baldr::TileHierarchy::levels()[static_cast<size_t>(level)].tiles.TileList(bbox);
 
-  rust::vec<TileId> result;
+  rust::vec<baldr::GraphId> result;
   result.reserve(tile_ids.size());
   for (auto tile_id : tile_ids) {
     const baldr::GraphId graph_id(tile_id, static_cast<uint32_t>(level), 0);
     // List only tiles that we have
     if (tiles.find(graph_id.Tile_Base()) != tiles.end()) {
-      result.push_back(graph_id.value);
+      result.push_back(graph_id);
     }
   }
   return result;
 }
 
-rust::Vec<TrafficEdge> TileSet::get_tile_traffic(TileId id) const {
-  auto tile = get_tile(*this, baldr::GraphId(id));
-  if (!tile) {
-    return {};
+/// Part of the [`baldr::GraphReader::GetGraphTile()`] that gets tile from mmap file
+baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
+  auto base = id.Tile_Base();
+
+  auto tile_it = tiles.find(base);
+  if (tile_it == tiles.end()) {
+    return nullptr;
   }
-  const auto & traffic_tile = tile->get_traffic_tile();
+
+  // Optionally get the traffic tile if it exists
+  auto traffic_it = traffic_tiles.find(base);
+  auto traffic = traffic_it != traffic_tiles.end() ? std::make_unique<GraphMemory>(traffic_it->second) : nullptr;
+
+  // This initializes the tile from mmap
+  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tile_it->second), std::move(traffic));
+}
+
+rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile & tile) {
+  const auto & traffic_tile = tile.get_traffic_tile();
   if (!traffic_tile()) {
     return {};
   }
@@ -88,12 +85,12 @@ rust::Vec<TrafficEdge> TileSet::get_tile_traffic(TileId id) const {
   for (uint32_t i = 0; i < traffic_tile.header->directed_edge_count; ++i) {
     const volatile auto & live_speed = traffic_tile.speeds[i];
     if (live_speed.speed_valid()) {
-      const auto * de = tile->directededge(i);
-      const auto edge_info = tile->edgeinfo(de);
+      const auto * de = tile.directededge(i);
+      const auto edge_info = tile.edgeinfo(de);
 
       float normalized_speed = 0.0;
       if (!live_speed.closed()) {
-        const uint32_t speed = tile->GetSpeed(de, baldr::kDefaultFlowMask);
+        const uint32_t speed = tile.GetSpeed(de, baldr::kDefaultFlowMask);
         uint32_t road_speed = 0;
         for (const uint32_t speed : { edge_info.speed_limit(), de->free_flow_speed(), de->speed() }) {
           road_speed = speed;

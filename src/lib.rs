@@ -1,9 +1,15 @@
 use std::{os::unix::ffi::OsStrExt, path::PathBuf};
 
-pub use ffi::GraphLevel;
-
 #[cxx::bridge]
 mod ffi {
+    /// Identifier of a node or an edge within the tiled, hierarchical graph.
+    /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
+    // #[derive(Clone, Copy, Debug, PartialEq)]
+    struct GraphId {
+        value: u64,
+    }
+
+    /// Hierarchical graph level that defines the type of roads and their importance.
     enum GraphLevel {
         Highway,
         Arterial,
@@ -23,6 +29,20 @@ mod ffi {
     unsafe extern "C++" {
         include!("libvalhalla/src/libvalhalla.hpp");
 
+        #[namespace = "valhalla::baldr"]
+        type GraphId;
+        /// Hierarchy level of the tile this identifier belongs to
+        fn level(self: &GraphId) -> u32;
+        /// Tile identifier of this GraphId within the hierarchy level
+        fn tileid(self: &GraphId) -> u32;
+        /// Combined tile information (level and tile id) as a single value
+        #[cxx_name = "Tile_Base"]
+        fn tile(self: &GraphId) -> GraphId;
+        /// Identifier within the tile, unique within the tile and level
+        fn id(self: &GraphId) -> u32;
+
+        type GraphTile;
+
         type GraphLevel;
 
         type TileSet;
@@ -34,8 +54,12 @@ mod ffi {
             max_lat: f32,
             max_lon: f32,
             level: GraphLevel,
-        ) -> Vec<u64>;
-        fn get_tile_traffic(self: &TileSet, id: u64) -> Vec<TrafficEdge>;
+        ) -> Vec<GraphId>;
+        fn get_tile(self: &TileSet, id: GraphId) -> SharedPtr<GraphTile>;
+
+        /// Retrieves all traffic flows for a given tile.
+        /// todo: move it in Rust and implement via bindings
+        fn get_tile_traffic_flows(tile: &GraphTile) -> Vec<TrafficEdge>;
     }
 }
 
@@ -47,10 +71,8 @@ unsafe impl Sync for ffi::TileSet {}
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LatLon(pub f32, pub f32);
 
-/// Road graph tile id
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TileId(pub u64);
-
+pub use ffi::GraphId;
+pub use ffi::GraphLevel;
 pub use ffi::TrafficEdge;
 
 #[derive(Clone)]
@@ -72,15 +94,36 @@ impl GraphReader {
         Some(Self { tileset })
     }
 
-    pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<TileId> {
+    pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<GraphId> {
         self.tileset
             .tiles_in_bbox(min.0, min.1, max.0, max.1, level)
-            .into_iter()
-            .map(TileId)
-            .collect()
     }
 
-    pub fn get_tile_traffic_flows(&self, id: TileId) -> Vec<TrafficEdge> {
-        self.tileset.get_tile_traffic(id.0)
+    pub fn get_tile_traffic_flows(&self, id: GraphId) -> Vec<TrafficEdge> {
+        self.tileset
+            .get_tile(id)
+            .as_ref()
+            .map(ffi::get_tile_traffic_flows)
+            .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn graph_id() {
+        let id = GraphId {
+            value: 5411833275938,
+        };
+        assert_eq!(id.level(), 2);
+        assert_eq!(id.tileid(), 838852);
+        assert_eq!(id.id(), 161285);
+
+        let base = id.tile();
+        assert_eq!(base.level(), 2);
+        assert_eq!(base.tileid(), 838852);
+        assert_eq!(base.id(), 0);
     }
 }
