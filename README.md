@@ -2,6 +2,15 @@
 
 C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) to access road graph tiles, powered by [cxx](http://cxx.rs).
 
+## Usage
+
+Add this to your Cargo.toml:
+
+```toml
+[dependencies]
+valhalla = "0.1"
+```
+
 ## Dependencies
 
 As Valhalla heavilly relies on system libraries, you need to install the following dependencies to build this project:
