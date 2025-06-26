@@ -10,13 +10,17 @@ As Valhalla heavilly relies on system libraries, you need to install the followi
 sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
 ```
 
-You can use the provided [Dockerfile](Dockerfile) as a reference for projects that want to use libvalhalla. It demonstrates the necessary dependencies and environment setup.
+You can use the provided [Dockerfile](Dockerfile) as a reference for projects that want to use `valhalla-rs`. It demonstrates the necessary dependencies and environment setup.
+
+For more details check the [Valhalla documentation](https://valhalla.github.io/valhalla/building/#platform-specific-builds).
 
 ## License
 
-All code in this project is dual-licensed under either:
+This project contains Rust bindings for the Valhalla routing engine. The entire project is licensed under the MIT License.
 
-- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) ([`LICENSE-APACHE`](LICENSE-APACHE))
-- [MIT license](https://opensource.org/licenses/MIT) ([`LICENSE-MIT`](LICENSE-MIT))
+- **valhalla-rs bindings**: Copyright (c) 2025 kinkard
+- **Valhalla source code**: Copyright (c) 2018 Valhalla contributors, Copyright (c) 2015-2017 Mapillary AB, Mapzen
 
-at your option.
+Both components are licensed under the [MIT License](LICENSE).
+
+For the original Valhalla license, see [valhalla/COPYING](valhalla/COPYING).

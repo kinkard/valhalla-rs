@@ -1,5 +1,5 @@
 #include "libvalhalla.hpp"
-#include "libvalhalla/src/lib.rs.h"
+#include "valhalla/src/lib.rs.h"
 
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/config.h>

@@ -1,4 +1,4 @@
-use libvalhalla::GraphReader;
+use valhalla::GraphReader;
 
 #[test]
 fn empty() {

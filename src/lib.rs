@@ -27,7 +27,7 @@ mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("libvalhalla/src/libvalhalla.hpp");
+        include!("valhalla/src/libvalhalla.hpp");
 
         #[namespace = "valhalla::baldr"]
         type GraphId;

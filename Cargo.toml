@@ -1,12 +1,28 @@
 [package]
-name = "libvalhalla"
+name = "valhalla"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust bindings for Valhalla routing engine"
 readme = "README.md"
-repository = "https://github.com/kinkard/valhalla-debug"
-license = "MIT OR Apache-2.0"
+repository = "https://github.com/kinkard/valhalla-rs"
+license = "MIT"
+keywords = ["geo", "routing", "navigation", "ffi", "valhalla"]
+# Valhalla uses git submodules that bring a lot of files that we don't need in the published crate.
+exclude = [
+    "**/.github/*",
+    "**/test/*",
+    "**/tests/*",
+    "**/googletest/*",
+    "**/googlemock/*",
+    "**/doc/*",
+    "**/docs/*",
+    "**/doctest/*",
+
+    "valhalla/test_requests/*",
+    "valhalla/run_route_scripts/*",
+    "valhalla/third_party/rapidjson/bin/*",
+]
 
 [dependencies]
 cxx = { version = "1.0", features = ["c++17"] }
@@ -14,5 +30,5 @@ cxx = { version = "1.0", features = ["c++17"] }
 [build-dependencies]
 cmake = "0.1"
 cxx-build = "1.0"
-miniserde = "0.1"     # For compile_commands.json parsing
+miniserde = "0.1"  # For compile_commands.json parsing
 pkg-config = "0.3"

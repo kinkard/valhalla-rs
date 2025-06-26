@@ -135,17 +135,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
-name = "libvalhalla"
-version = "0.1.0"
-dependencies = [
- "cmake",
- "cxx",
- "cxx-build",
- "miniserde",
- "pkg-config",
-]
-
-[[package]]
 name = "link-cplusplus"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -281,6 +270,17 @@ name = "unicode-width"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fc81956842c57dac11422a97c3b8195a1ff727f06e85c84ed2e8aa277c9a0fd"
+
+[[package]]
+name = "valhalla"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "cxx",
+ "cxx-build",
+ "miniserde",
+ "pkg-config",
+]
 
 [[package]]
 name = "winapi-util"
