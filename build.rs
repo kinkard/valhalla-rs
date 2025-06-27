@@ -102,7 +102,7 @@ fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()>
                 }
                 Err(_) => {
                     // Broken symlink, skip it
-                    eprintln!("Warning: Skipping broken symlink: {:?}", src_path);
+                    eprintln!("Warning: Skipping broken symlink: {src_path:?}");
                 }
             }
         }
