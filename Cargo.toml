@@ -1,6 +1,6 @@
 [package]
 name = "valhalla"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust bindings for Valhalla routing engine"
@@ -10,6 +10,7 @@ license = "MIT"
 keywords = ["geo", "routing", "navigation", "ffi", "valhalla"]
 # Valhalla uses git submodules that bring a lot of files that we don't need in the published crate.
 exclude = [
+    "**/.*",
     "**/.github/*",
     "**/test/*",
     "**/tests/*",
@@ -18,10 +19,13 @@ exclude = [
     "**/doc/*",
     "**/docs/*",
     "**/doctest/*",
+    # Somehow, valhalla/LICENSE.md is required for cmake, so all unused docs are excluded in a more specific way.
+    "valhalla/third_party/**/*.md",
 
     "valhalla/test_requests/*",
     "valhalla/run_route_scripts/*",
     "valhalla/third_party/rapidjson/bin/*",
+    "valhalla/CHANGELOG.md",
 ]
 
 [dependencies]
