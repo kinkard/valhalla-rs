@@ -1,4 +1,4 @@
-use std::{os::unix::ffi::OsStrExt, path::PathBuf};
+use std::{os::unix::ffi::OsStrExt, path::Path};
 
 #[cxx::bridge]
 mod ffi {
@@ -81,7 +81,7 @@ pub struct GraphReader {
 }
 
 impl GraphReader {
-    pub fn new(config_file: PathBuf) -> Option<Self> {
+    pub fn new(config_file: &Path) -> Option<Self> {
         cxx::let_cxx_string!(cxx_str = config_file.as_os_str().as_bytes());
         let tileset = match ffi::new_tileset(&cxx_str) {
             Ok(tileset) => tileset,

@@ -2,7 +2,7 @@
 #include "valhalla/src/lib.rs.h"
 
 #include <valhalla/baldr/graphreader.h>
-#include <valhalla/config.h>
+#include <valhalla/baldr/rapidjson_utils.h>
 #include <valhalla/midgard/encoded.h>
 
 namespace baldr = valhalla::baldr;
@@ -36,8 +36,14 @@ std::shared_ptr<TileSet> new_tileset(const std::string & config_file) {
     }
   };
 
-  boost::property_tree::ptree config = valhalla::config(config_file);
-  return std::make_shared<TileSet>(TileSetReader::create(config.get_child("mjolnir")));
+  // `valhalla::config` uses singleton to load config only once which is not suitable for this library
+  boost::property_tree::ptree pt;
+  rapidjson::read_json(config_file, pt);
+  auto tile_set = TileSetReader::create(pt.get_child("mjolnir"));
+  if (!tile_set.archive) {
+    throw std::runtime_error("Failed to load tile extract from");
+  }
+  return std::make_shared<TileSet>(std::move(tile_set));
 }
 
 rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,

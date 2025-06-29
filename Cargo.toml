@@ -1,6 +1,6 @@
 [package]
 name = "valhalla"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust bindings for Valhalla routing engine"
@@ -36,3 +36,7 @@ cmake = "0.1"
 cxx-build = "1.0"
 miniserde = "0.1"  # For compile_commands.json parsing
 pkg-config = "0.3"
+
+[dev-dependencies]
+miniserde = "0.1"
+tempfile = "3.20"
