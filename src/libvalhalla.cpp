@@ -80,6 +80,25 @@ baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
   return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tile_it->second), std::move(traffic));
 }
 
+DirectedEdgeSlice directededges(const GraphTile & tile) {
+  return DirectedEdgeSlice{
+    .ptr = tile.directededge(0),
+    .len = tile.header()->directededgecount(),
+  };
+}
+
+EdgeInfo edgeinfo(const GraphTile & tile, const valhalla::baldr::DirectedEdge & de) {
+  const auto edge_info = tile.edgeinfo(&de);
+  return EdgeInfo{
+    .way_id = edge_info.wayid(),
+    // todo: properly handle `0` and `baldr::kUnlimitedSpeedLimit`
+    .speed_limit = static_cast<uint8_t>(edge_info.speed_limit()),
+    // todo: directionality!
+    // todo: use `edge_info.lazy_shape()` for better performance
+    .shape = midgard::encode(edge_info.shape()),
+  };
+}
+
 rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile & tile) {
   const auto & traffic_tile = tile.get_traffic_tile();
   if (!traffic_tile()) {

@@ -2,6 +2,14 @@ use std::{os::unix::ffi::OsStrExt, path::Path};
 
 #[cxx::bridge]
 mod ffi {
+    /// Hierarchical graph level that defines the type of roads and their importance.
+    #[derive(Clone, Copy, Debug)]
+    enum GraphLevel {
+        Highway = 0,
+        Arterial = 1,
+        Local = 2,
+    }
+
     /// Identifier of a node or an edge within the tiled, hierarchical graph.
     /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
     #[derive(Clone, Copy, Debug)]
@@ -9,41 +17,59 @@ mod ffi {
         value: u64,
     }
 
-    /// Hierarchical graph level that defines the type of roads and their importance.
-    enum GraphLevel {
-        Highway = 0,
-        Arterial = 1,
-        Local = 2,
+    /// Directed edge within the graph.
+    struct DirectedEdge {
+        // With this definition and cxx's magic it becomes possible to do pointer arithmetic properly,
+        // allowing to operate with slices of `DirectedEdge` in Rust.
+        // Otherwise, Rust compiler has no way to know the size of the `DirectedEdge` struct and assumes that
+        // `DirectedEdge` is a zero-sized type (ZST), which leads to incorrect pointer arithmetic.
+        // The whole Valhalla's ability to work with binary files (tilesets) relies this contract.
+        data: [u64; 6],
     }
 
-    /// Representation of the road graph edge with traffic information that contains a subset of
-    /// data stored in [`valhalla::baldr::DirectedEdge`] and [`valhalla::baldr::EdgeInfo`] that
-    /// is exposed to Rust.
-    struct TrafficEdge {
-        /// Polyline6 encoded shape of the edge
+    /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
+    struct EdgeInfo {
+        /// OSM Way ID of the edge.
+        way_id: u64,
+        /// Speed limit in km/h. 0 if not available and 255 if not limited (e.g. autobahn).
+        speed_limit: u8,
+        /// polyline6 encoded shape of the edge.
         shape: String,
-        /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable)
+    }
+
+    /// Representation of the road graph edge with traffic information that contains a subset of data
+    /// stored in [`valhalla::baldr::DirectedEdge`] and [`valhalla::baldr::EdgeInfo`] that is exposed to Rust.
+    struct TrafficEdge {
+        /// polyline6 encoded shape of the edge
+        shape: String,
+        /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable).
         normalized_speed: f32,
+    }
+
+    /// Helper struct to return a slice of directed edges from C++ to Rust.
+    struct DirectedEdgeSlice {
+        /// Pointer to the first directed edge in the span.
+        ptr: *const DirectedEdge,
+        /// Number of directed edges in the span.
+        len: usize,
     }
 
     unsafe extern "C++" {
         include!("valhalla/src/libvalhalla.hpp");
 
+        type GraphLevel;
+
         #[namespace = "valhalla::baldr"]
         type GraphId;
-        /// Hierarchy level of the tile this identifier belongs to
+        /// Hierarchy level of the tile this identifier belongs to.
         fn level(self: &GraphId) -> u32;
-        /// Tile identifier of this GraphId within the hierarchy level
+        /// Tile identifier of this GraphId within the hierarchy level.
         fn tileid(self: &GraphId) -> u32;
-        /// Combined tile information (level and tile id) as a single value
+        /// Combined tile information (level and tile id) as a single value.
         #[cxx_name = "Tile_Base"]
         fn tile(self: &GraphId) -> GraphId;
-        /// Identifier within the tile, unique within the tile and level
+        /// Identifier within the tile, unique within the tile and level.
         fn id(self: &GraphId) -> u32;
-
-        type GraphTile;
-
-        type GraphLevel;
 
         type TileSet;
         fn new_tileset(config_file: &CxxString) -> Result<SharedPtr<TileSet>>;
@@ -57,20 +83,40 @@ mod ffi {
         ) -> Vec<GraphId>;
         fn get_tile(self: &TileSet, id: GraphId) -> SharedPtr<GraphTile>;
 
+        type GraphTile;
+        fn id(self: &GraphTile) -> GraphId;
+        fn directededges(tile: &GraphTile) -> DirectedEdgeSlice;
+        fn directededge(self: &GraphTile, index: usize) -> Result<*const DirectedEdge>;
+        fn edgeinfo(tile: &GraphTile, de: &DirectedEdge) -> EdgeInfo;
         /// Retrieves all traffic flows for a given tile.
-        /// todo: move it in Rust and implement via bindings
+        /// todo: move it in Rust and implement via bindings.
         fn get_tile_traffic_flows(tile: &GraphTile) -> Vec<TrafficEdge>;
+
+        #[namespace = "valhalla::baldr"]
+        type DirectedEdge;
+        /// Returns the length of the edge in meters.
+        fn length(self: &DirectedEdge) -> u32;
+        /// Returns the default speed in km/h for this edge.
+        fn speed(self: &DirectedEdge) -> u32;
+        /// Returns the free flow speed (typical speed during night, from 7pm to 7am) in km/h for this edge.
+        fn free_flow_speed(self: &DirectedEdge) -> u32;
+        /// Returns the constrained flow speed (typical speed during day, from 7am to 7pm) in km/h for this edge.
+        fn constrained_flow_speed(self: &DirectedEdge) -> u32;
+        /// Is this edge a shortcut edge.
+        fn is_shortcut(self: &DirectedEdge) -> bool;
     }
 }
 
-// safery: All operations do not mutate [`TileSet`] inner state
+// Safety: All operations do not mutate [`TileSet`] inner state.
 unsafe impl Send for ffi::TileSet {}
 unsafe impl Sync for ffi::TileSet {}
 
-/// Coordinate in (lat, lon) format
+/// Coordinate in (lat, lon) format.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LatLon(pub f32, pub f32);
 
+pub use ffi::DirectedEdge;
+pub use ffi::EdgeInfo;
 pub use ffi::GraphId;
 pub use ffi::GraphLevel;
 pub use ffi::TrafficEdge;
@@ -109,6 +155,12 @@ impl GraphReader {
         Some(Self { tileset })
     }
 
+    /// Graph tile object at given GraphId if it exists in the tileset.
+    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
+        GraphTile::new(self.tileset.get_tile(id))
+    }
+
+    /// List all tiles in the bounding box for a given hierarchy level in the tileset.
     pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<GraphId> {
         self.tileset
             .tiles_in_bbox(min.0, min.1, max.0, max.1, level)
@@ -120,6 +172,53 @@ impl GraphReader {
             .as_ref()
             .map(ffi::get_tile_traffic_flows)
             .unwrap_or_default()
+    }
+}
+
+/// Graph information for a tile within the Tiled Hierarchical Graph.
+#[derive(Clone)]
+pub struct GraphTile {
+    tile: cxx::SharedPtr<ffi::GraphTile>,
+}
+
+impl GraphTile {
+    fn new(tile: cxx::SharedPtr<ffi::GraphTile>) -> Option<Self> {
+        if tile.is_null() {
+            None
+        } else {
+            Some(Self { tile })
+        }
+    }
+
+    /// GraphID of the tile, which includes the tile ID and hierarchy level.
+    pub fn id(&self) -> GraphId {
+        self.tile.id()
+    }
+
+    /// Slice of all directed edges in the current tile.
+    pub fn directededges(&self) -> &[ffi::DirectedEdge] {
+        let slice = ffi::directededges(&self.tile);
+        // Safety: correctness of the pointer arithmetic is checked by integration tests over a real dataset.
+        // This works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`], as Rust compiler
+        // has no way to know the size of the `ffi::DirectedEdge` struct and without that field Rust assumes that
+        // `ffi::DirectedEdge` is zero-sized type (ZST).
+        // At the same time, whole Valhalla's ability to work with binary files (tilesets) relies this contract.
+        unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
+    }
+
+    /// Index of the directed edge within the current tile if it exists.
+    pub fn directededge(&self, index: usize) -> Option<&ffi::DirectedEdge> {
+        match self.tile.directededge(index) {
+            Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
+            // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
+            // But it also sounds nice to handle nullptr in the same way.
+            _ => None,
+        }
+    }
+
+    /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
+    pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
+        ffi::edgeinfo(&self.tile, de)
     }
 }
 
