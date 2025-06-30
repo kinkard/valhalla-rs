@@ -39,4 +39,5 @@ pkg-config = "0.3"
 
 [dev-dependencies]
 miniserde = "0.1"
+pretty_assertions = "1"
 tempfile = "3.20"
