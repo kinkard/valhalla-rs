@@ -19,12 +19,15 @@ exclude = [
     "**/doc/*",
     "**/docs/*",
     "**/doctest/*",
+    "**/bench/*",
     # Somehow, valhalla/LICENSE.md is required for cmake, so all unused docs are excluded in a more specific way.
     "valhalla/third_party/**/*.md",
 
     "valhalla/test_requests/*",
     "valhalla/run_route_scripts/*",
     "valhalla/third_party/rapidjson/bin/*",
+    "valhalla/third_party/tz/NEWS",
+    "valhalla/taginfo.json",
     "valhalla/CHANGELOG.md",
 ]
 
