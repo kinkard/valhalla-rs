@@ -4,7 +4,7 @@ use std::{os::unix::ffi::OsStrExt, path::Path};
 mod ffi {
     /// Identifier of a node or an edge within the tiled, hierarchical graph.
     /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
-    // #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug)]
     struct GraphId {
         value: u64,
     }
@@ -74,6 +74,21 @@ pub struct LatLon(pub f32, pub f32);
 pub use ffi::GraphId;
 pub use ffi::GraphLevel;
 pub use ffi::TrafficEdge;
+
+impl Default for GraphId {
+    fn default() -> Self {
+        Self {
+            // `valhalla::baldr::kInvalidGraphId`
+            value: 0x3fffffffffff,
+        }
+    }
+}
+
+impl PartialEq for GraphId {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
 
 #[derive(Clone)]
 pub struct GraphReader {
