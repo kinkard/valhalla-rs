@@ -36,8 +36,23 @@ fn tiles_and_traffic_ok() {
     let world = (LatLon(-90.0, -180.0), LatLon(90.0, 180.0));
     let tiles = reader.tiles_in_bbox(world.0, world.1, GraphLevel::Highway);
     assert_eq!(tiles.len(), 1);
+    assert!(
+        tiles
+            .iter()
+            .all(|t| t.level() == GraphLevel::Highway.repr as u32)
+    );
     let tiles = reader.tiles_in_bbox(world.0, world.1, GraphLevel::Arterial);
     assert_eq!(tiles.len(), 1);
+    assert!(
+        tiles
+            .iter()
+            .all(|t| t.level() == GraphLevel::Arterial.repr as u32)
+    );
     let tiles = reader.tiles_in_bbox(world.0, world.1, GraphLevel::Local);
     assert_eq!(tiles.len(), 5);
+    assert!(
+        tiles
+            .iter()
+            .all(|t| t.level() == GraphLevel::Local.repr as u32)
+    );
 }

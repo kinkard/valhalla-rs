@@ -11,9 +11,9 @@ mod ffi {
 
     /// Hierarchical graph level that defines the type of roads and their importance.
     enum GraphLevel {
-        Highway,
-        Arterial,
-        Local,
+        Highway = 0,
+        Arterial = 1,
+        Local = 2,
     }
 
     /// Representation of the road graph edge with traffic information that contains a subset of
