@@ -39,8 +39,8 @@ struct TileSet {
   valhalla::baldr::graph_tile_ptr get_tile(valhalla::baldr::GraphId id) const;
 };
 
-/// Creates a new [`TileSet`] instance based on a Valhalla's config json file
-std::shared_ptr<TileSet> new_tileset(const std::string& config_file);
+/// Creates a new [`TileSet`] instance based on a Valhalla's config json file or inline config.
+std::shared_ptr<TileSet> new_tileset(const std::string& config);
 
 /// The workaround to use `SharedPtr<GraphTile>` in Rust because of the `graph_tile_ptr` defined as
 /// `std::shared_ptr<const GraphTile>` and `cxx` doesn't support `const` in `SharedPtr`.

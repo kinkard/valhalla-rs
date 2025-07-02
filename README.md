@@ -8,7 +8,7 @@ Add this to your Cargo.toml:
 
 ```toml
 [dependencies]
-valhalla = "0.2"
+valhalla = "0.3"
 ```
 
 ## Dependencies

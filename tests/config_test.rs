@@ -21,7 +21,8 @@ const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
 
 #[test]
 fn empty_config_fail() {
-    assert!(GraphReader::new(&PathBuf::default()).is_none());
+    assert!(GraphReader::from_file(&PathBuf::default()).is_none());
+    assert!(GraphReader::from_json("").is_none());
 }
 
 #[test]
@@ -35,7 +36,7 @@ fn bad_config_fail() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::new(file.path()).is_none());
+    assert!(GraphReader::from_file(file.path()).is_none());
 }
 
 #[test]
@@ -49,7 +50,7 @@ fn tiles_only_ok() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::new(file.path()).is_some());
+    assert!(GraphReader::from_file(file.path()).is_some());
 }
 
 #[test]
@@ -63,7 +64,7 @@ fn traffic_only_fail() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::new(file.path()).is_none());
+    assert!(GraphReader::from_file(file.path()).is_none());
 }
 
 #[test]
@@ -77,5 +78,17 @@ fn tiles_and_traffic_ok() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::new(file.path()).is_some());
+    assert!(GraphReader::from_file(file.path()).is_some());
+}
+
+#[test]
+fn inline_config_ok() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+
+    assert!(GraphReader::from_json(&json::to_string(&config)).is_some());
 }

@@ -1,8 +1,5 @@
-use std::io::Write;
-
 use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
-use tempfile::NamedTempFile;
 
 use valhalla::{GraphId, GraphLevel, GraphReader, LatLon};
 
@@ -29,10 +26,8 @@ fn tiles_in_bbox() {
             traffic_extract: ANDORRA_TRAFFIC.into(),
         },
     };
-    let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
-    file.write_all(json::to_string(&config).as_bytes())
-        .expect("Failed to write config");
-    let reader = GraphReader::new(file.path()).expect("Failed to create GraphReader");
+    let reader =
+        GraphReader::from_json(&json::to_string(&config)).expect("Failed to create GraphReader");
 
     assert!(
         reader.get_tile(GraphId::default()).is_none(),

@@ -142,8 +142,23 @@ pub struct GraphReader {
 }
 
 impl GraphReader {
-    pub fn new(config_file: &Path) -> Option<Self> {
+    /// Creates a new GraphReader instance from the given configuration file.
+    pub fn from_file(config_file: &Path) -> Option<Self> {
         cxx::let_cxx_string!(cxx_str = config_file.as_os_str().as_bytes());
+        let tileset = match ffi::new_tileset(&cxx_str) {
+            Ok(tileset) => tileset,
+            Err(err) => {
+                println!("Failed to load tileset: {err:#}");
+                return None;
+            }
+        };
+
+        Some(Self { tileset })
+    }
+
+    /// Creates a new GraphReader instance from the inline configuration string that contains json.
+    pub fn from_json(config_json: &str) -> Option<Self> {
+        cxx::let_cxx_string!(cxx_str = config_json.as_bytes());
         let tileset = match ffi::new_tileset(&cxx_str) {
             Ok(tileset) => tileset,
             Err(err) => {

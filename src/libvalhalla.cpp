@@ -21,7 +21,7 @@ struct GraphMemory : public baldr::GraphMemory {
 
 TileSet::~TileSet() {}
 
-std::shared_ptr<TileSet> new_tileset(const std::string& config_file) {
+std::shared_ptr<TileSet> new_tileset(const std::string& config) {
   // Hack to expose protected `baldr::GraphReader::tile_extract_t`
   struct TileSetReader : public baldr::GraphReader {
     static TileSet create(const boost::property_tree::ptree& pt) {
@@ -38,7 +38,13 @@ std::shared_ptr<TileSet> new_tileset(const std::string& config_file) {
 
   // `valhalla::config` uses singleton to load config only once which is not suitable for this library
   boost::property_tree::ptree pt;
-  rapidjson::read_json(config_file, pt);
+  if (config.find('{') != std::string::npos) {  // `{` is illegal in file names on most systems
+    auto inline_config = std::stringstream(config);
+    rapidjson::read_json(inline_config, pt);
+  } else {
+    rapidjson::read_json(config, pt);
+  }
+
   auto tile_set = TileSetReader::create(pt.get_child("mjolnir"));
   if (!tile_set.archive) {
     throw std::runtime_error("Failed to load tile extract from");
