@@ -28,8 +28,8 @@ struct TileSet {
   /// std::unique_ptr due to forward declarations for `midgard::tar`
   ~TileSet();
 
-  std::unordered_map<uint64_t, std::pair<char *, size_t>> tiles;
-  std::unordered_map<uint64_t, std::pair<char *, size_t>> traffic_tiles;
+  std::unordered_map<uint64_t, std::pair<char*, size_t>> tiles;
+  std::unordered_map<uint64_t, std::pair<char*, size_t>> traffic_tiles;
   std::shared_ptr<valhalla::midgard::tar> archive;
   std::shared_ptr<valhalla::midgard::tar> traffic_archive;
   uint64_t checksum;
@@ -40,7 +40,7 @@ struct TileSet {
 };
 
 /// Creates a new [`TileSet`] instance based on a Valhalla's config json file
-std::shared_ptr<TileSet> new_tileset(const std::string & config_file);
+std::shared_ptr<TileSet> new_tileset(const std::string& config_file);
 
 /// The workaround to use `SharedPtr<GraphTile>` in Rust because of the `graph_tile_ptr` defined as
 /// `std::shared_ptr<const GraphTile>` and `cxx` doesn't support `const` in `SharedPtr`.
@@ -54,4 +54,4 @@ EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de
 
 /// Retrieves all traffic flows for a given tile.
 /// todo: move it in Rust and implement via bindings
-rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile & tile);
+rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile& tile);

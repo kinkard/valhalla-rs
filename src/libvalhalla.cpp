@@ -11,7 +11,7 @@ namespace midgard = valhalla::midgard;
 namespace {
 
 struct GraphMemory : public baldr::GraphMemory {
-  GraphMemory(std::pair<char *, size_t> position) {
+  GraphMemory(std::pair<char*, size_t> position) {
     data = position.first;
     size = position.second;
   }
@@ -21,10 +21,10 @@ struct GraphMemory : public baldr::GraphMemory {
 
 TileSet::~TileSet() {}
 
-std::shared_ptr<TileSet> new_tileset(const std::string & config_file) {
+std::shared_ptr<TileSet> new_tileset(const std::string& config_file) {
   // Hack to expose protected `baldr::GraphReader::tile_extract_t`
   struct TileSetReader : public baldr::GraphReader {
-    static TileSet create(const boost::property_tree::ptree & pt) {
+    static TileSet create(const boost::property_tree::ptree& pt) {
       auto extract = baldr::GraphReader::tile_extract_t(pt);
       return TileSet{
         .tiles = std::move(extract.tiles),
@@ -80,14 +80,14 @@ baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
   return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tile_it->second), std::move(traffic));
 }
 
-DirectedEdgeSlice directededges(const GraphTile & tile) {
+DirectedEdgeSlice directededges(const GraphTile& tile) {
   return DirectedEdgeSlice{
     .ptr = tile.directededge(0),
     .len = tile.header()->directededgecount(),
   };
 }
 
-EdgeInfo edgeinfo(const GraphTile & tile, const valhalla::baldr::DirectedEdge & de) {
+EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de) {
   const auto edge_info = tile.edgeinfo(&de);
 
   rust::string shape;
@@ -111,8 +111,8 @@ EdgeInfo edgeinfo(const GraphTile & tile, const valhalla::baldr::DirectedEdge & 
   };
 }
 
-rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile & tile) {
-  const auto & traffic_tile = tile.get_traffic_tile();
+rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile& tile) {
+  const auto& traffic_tile = tile.get_traffic_tile();
   if (!traffic_tile()) {
     return {};
   }
@@ -120,9 +120,9 @@ rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile & tile) {
   rust::Vec<TrafficEdge> flows;
   flows.reserve(traffic_tile.header->directed_edge_count);
   for (uint32_t i = 0; i < traffic_tile.header->directed_edge_count; ++i) {
-    const volatile auto & live_speed = traffic_tile.speeds[i];
+    const volatile auto& live_speed = traffic_tile.speeds[i];
     if (live_speed.speed_valid()) {
-      const auto * de = tile.directededge(i);
+      const auto* de = tile.directededge(i);
       const auto edge_info = tile.edgeinfo(de);
 
       float normalized_speed = 0.0;
