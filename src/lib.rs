@@ -136,6 +136,12 @@ impl PartialEq for GraphId {
     }
 }
 
+impl GraphId {
+    pub fn new(value: u64) -> Self {
+        Self { value }
+    }
+}
+
 #[derive(Clone)]
 pub struct GraphReader {
     tileset: cxx::SharedPtr<ffi::TileSet>,
@@ -243,9 +249,7 @@ mod tests {
 
     #[test]
     fn graph_id() {
-        let id = GraphId {
-            value: 5411833275938,
-        };
+        let id = GraphId::new(5411833275938);
         assert_eq!(id.level(), 2);
         assert_eq!(id.tileid(), 838852);
         assert_eq!(id.id(), 161285);
@@ -254,5 +258,8 @@ mod tests {
         assert_eq!(base.level(), 2);
         assert_eq!(base.tileid(), 838852);
         assert_eq!(base.id(), 0);
+
+        let default_id = GraphId::default();
+        assert_eq!(default_id.level(), 7);
     }
 }
