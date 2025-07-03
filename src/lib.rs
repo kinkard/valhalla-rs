@@ -1,4 +1,8 @@
-use std::{os::unix::ffi::OsStrExt, path::Path};
+use std::{
+    hash::{Hash, Hasher},
+    os::unix::ffi::OsStrExt,
+    path::Path,
+};
 
 #[cxx::bridge]
 mod ffi {
@@ -12,7 +16,7 @@ mod ffi {
 
     /// Identifier of a node or an edge within the tiled, hierarchical graph.
     /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, Eq)]
     struct GraphId {
         value: u64,
     }
@@ -133,6 +137,12 @@ impl Default for GraphId {
 impl PartialEq for GraphId {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
+    }
+}
+
+impl Hash for GraphId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
     }
 }
 
