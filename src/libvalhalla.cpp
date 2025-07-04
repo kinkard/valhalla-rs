@@ -27,11 +27,11 @@ std::shared_ptr<TileSet> new_tileset(const std::string& config) {
     static TileSet create(const boost::property_tree::ptree& pt) {
       auto extract = baldr::GraphReader::tile_extract_t(pt);
       return TileSet{
-        .tiles = std::move(extract.tiles),
-        .traffic_tiles = std::move(extract.traffic_tiles),
-        .archive = std::move(extract.archive),
-        .traffic_archive = std::move(extract.traffic_archive),
-        .checksum = extract.checksum,
+        .tiles_ = std::move(extract.tiles),
+        .traffic_tiles_ = std::move(extract.traffic_tiles),
+        .archive_ = std::move(extract.archive),
+        .traffic_archive_ = std::move(extract.traffic_archive),
+        .checksum_ = extract.checksum,
       };
     }
   };
@@ -46,10 +46,19 @@ std::shared_ptr<TileSet> new_tileset(const std::string& config) {
   }
 
   auto tile_set = TileSetReader::create(pt.get_child("mjolnir"));
-  if (!tile_set.archive) {
+  if (!tile_set.archive_) {
     throw std::runtime_error("Failed to load tile extract from");
   }
   return std::make_shared<TileSet>(std::move(tile_set));
+}
+
+rust::Vec<baldr::GraphId> TileSet::tiles() const {
+  rust::vec<baldr::GraphId> result;
+  result.reserve(tiles_.size());
+  for (const auto& tile : tiles_) {
+    result.push_back(baldr::GraphId(tile.first));
+  }
+  return result;
 }
 
 rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
@@ -62,7 +71,7 @@ rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, f
   for (auto tile_id : tile_ids) {
     const baldr::GraphId graph_id(tile_id, static_cast<uint32_t>(level), 0);
     // List only tiles that we have
-    if (tiles.find(graph_id.Tile_Base()) != tiles.end()) {
+    if (tiles_.find(graph_id.Tile_Base()) != tiles_.end()) {
       result.push_back(graph_id);
     }
   }
@@ -73,14 +82,14 @@ rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, f
 baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
   auto base = id.Tile_Base();
 
-  auto tile_it = tiles.find(base);
-  if (tile_it == tiles.end()) {
+  auto tile_it = tiles_.find(base);
+  if (tile_it == tiles_.end()) {
     return nullptr;
   }
 
   // Optionally get the traffic tile if it exists
-  auto traffic_it = traffic_tiles.find(base);
-  auto traffic = traffic_it != traffic_tiles.end() ? std::make_unique<GraphMemory>(traffic_it->second) : nullptr;
+  auto traffic_it = traffic_tiles_.find(base);
+  auto traffic = traffic_it != traffic_tiles_.end() ? std::make_unique<GraphMemory>(traffic_it->second) : nullptr;
 
   // This initializes the tile from mmap
   return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tile_it->second), std::move(traffic));

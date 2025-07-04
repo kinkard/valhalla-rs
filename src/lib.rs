@@ -76,7 +76,8 @@ mod ffi {
         fn id(self: &GraphId) -> u32;
 
         type TileSet;
-        fn new_tileset(config_file: &CxxString) -> Result<SharedPtr<TileSet>>;
+        fn new_tileset(config: &CxxString) -> Result<SharedPtr<TileSet>>;
+        fn tiles(self: &TileSet) -> Vec<GraphId>;
         fn tiles_in_bbox(
             self: &TileSet,
             min_lat: f32,
@@ -189,6 +190,11 @@ impl GraphReader {
     /// Graph tile object at given GraphId if it exists in the tileset.
     pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
         GraphTile::new(self.tileset.get_tile(id))
+    }
+
+    /// List all tiles in the tileset.
+    pub fn tiles(&self) -> Vec<GraphId> {
+        self.tileset.tiles()
     }
 
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.
