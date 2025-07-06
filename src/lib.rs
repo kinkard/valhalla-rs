@@ -4,6 +4,8 @@ use std::{
     path::Path,
 };
 
+mod actor;
+
 pub use ffi::DirectedEdge;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
