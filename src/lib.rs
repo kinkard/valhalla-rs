@@ -116,6 +116,10 @@ mod ffi {
 unsafe impl Send for ffi::TileSet {}
 unsafe impl Sync for ffi::TileSet {}
 
+// Safety: All operations do not mutate [`GraphTile`] inner state.
+unsafe impl Send for ffi::GraphTile {}
+unsafe impl Sync for ffi::GraphTile {}
+
 /// Coordinate in (lat, lon) format.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LatLon(pub f32, pub f32);
