@@ -20,13 +20,10 @@ const ANDORRA_TILES: &str = "tests/andorra/tiles.tar";
 const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
 
 #[test]
-fn empty_config_fail() {
-    assert!(GraphReader::from_file(&PathBuf::default()).is_none());
-    assert!(GraphReader::from_json("").is_none());
-}
+fn from_file() {
+    assert!(GraphReader::from_file(PathBuf::default()).is_none());
 
-#[test]
-fn bad_config_fail() {
+    // bad config
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
             tile_extract: "bad_path_to_tile_extract".into(),
@@ -37,10 +34,8 @@ fn bad_config_fail() {
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
     assert!(GraphReader::from_file(file.path()).is_none());
-}
 
-#[test]
-fn tiles_only_ok() {
+    // tiles only
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
             tile_extract: ANDORRA_TILES.into(),
@@ -51,10 +46,8 @@ fn tiles_only_ok() {
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
     assert!(GraphReader::from_file(file.path()).is_some());
-}
 
-#[test]
-fn traffic_only_fail() {
+    // traffic only
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
             tile_extract: "bad_path_to_tile_extract".into(), // No tile extract
@@ -65,10 +58,8 @@ fn traffic_only_fail() {
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
     assert!(GraphReader::from_file(file.path()).is_none());
-}
 
-#[test]
-fn tiles_and_traffic_ok() {
+    // tiles and traffic
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
             tile_extract: ANDORRA_TILES.into(),
@@ -82,13 +73,32 @@ fn tiles_and_traffic_ok() {
 }
 
 #[test]
-fn inline_config_ok() {
+fn from_json() {
+    assert!(GraphReader::from_json("").is_none());
+    assert!(GraphReader::from_json("{}").is_none());
+
+    // bad config
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: "bad_path_to_tile_extract".into(),
+            traffic_extract: "bad_path_to_traffic_extract".into(),
+        },
+    };
+    assert!(GraphReader::from_json(&json::to_string(&config)).is_none());
+
+    // tiles and traffic ok
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
             tile_extract: ANDORRA_TILES.into(),
             traffic_extract: ANDORRA_TRAFFIC.into(),
         },
     };
-
     assert!(GraphReader::from_json(&json::to_string(&config)).is_some());
+}
+
+#[test]
+fn from_tiles() {
+    assert!(GraphReader::from_tile_extract("").is_none());
+    assert!(GraphReader::from_tile_extract("bad_path_to_tile_extract").is_none());
+    assert!(GraphReader::from_tile_extract(ANDORRA_TILES).is_some());
 }

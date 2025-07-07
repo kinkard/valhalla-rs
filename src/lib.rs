@@ -159,9 +159,12 @@ pub struct GraphReader {
 }
 
 impl GraphReader {
-    /// Creates a new GraphReader instance from the given configuration file.
-    pub fn from_file(config_file: &Path) -> Option<Self> {
-        cxx::let_cxx_string!(cxx_str = config_file.as_os_str().as_bytes());
+    /// Creates a new GraphReader from the given Valhalla configuration file.
+    /// ```rust
+    /// let reader = valhalla::GraphReader::from_file("path/to/config.json");
+    /// ```
+    pub fn from_file(config_file: impl AsRef<Path>) -> Option<Self> {
+        cxx::let_cxx_string!(cxx_str = config_file.as_ref().as_os_str().as_bytes());
         let tileset = match ffi::new_tileset(&cxx_str) {
             Ok(tileset) => tileset,
             Err(err) => {
@@ -169,11 +172,14 @@ impl GraphReader {
                 return None;
             }
         };
-
         Some(Self { tileset })
     }
 
-    /// Creates a new GraphReader instance from the inline configuration string that contains json.
+    /// Creates a new GraphReader from a Valhalla configuration JSON string.
+    /// ```rust
+    /// let config = r#"{"mjolnir":{"tile_extract":"path/to/tiles.tar","traffic_extract":"path/to/traffic.tar"}}"#;
+    /// let reader = valhalla::GraphReader::from_json(&config);
+    /// ```
     pub fn from_json(config_json: &str) -> Option<Self> {
         cxx::let_cxx_string!(cxx_str = config_json.as_bytes());
         let tileset = match ffi::new_tileset(&cxx_str) {
@@ -183,8 +189,19 @@ impl GraphReader {
                 return None;
             }
         };
-
         Some(Self { tileset })
+    }
+
+    /// Creates a new GraphReader from path to the tiles tar extract.
+    /// ```rust
+    /// let reader = valhalla::GraphReader::from_tile_extract("path/to/tiles.tar");
+    /// ```
+    pub fn from_tile_extract(tile_extract: impl AsRef<Path>) -> Option<Self> {
+        let config = format!(
+            "{{\"mjolnir\":{{\"tile_extract\":\"{}\"}}}}",
+            tile_extract.as_ref().display()
+        );
+        Self::from_json(&config)
     }
 
     /// Graph tile object at given GraphId if it exists in the tileset.
