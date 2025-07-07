@@ -256,11 +256,15 @@ impl GraphTile {
     /// Slice of all directed edges in the current tile.
     pub fn directededges(&self) -> &[ffi::DirectedEdge] {
         let slice = ffi::directededges(&self.tile);
+        if slice.len == 0 {
+            return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
+        }
+
         // Safety: correctness of the pointer arithmetic is checked by integration tests over a real dataset.
-        // This works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`], as Rust compiler
-        // has no way to know the size of the `ffi::DirectedEdge` struct and without that field Rust assumes that
-        // `ffi::DirectedEdge` is zero-sized type (ZST).
-        // At the same time, whole Valhalla's ability to work with binary files (tilesets) relies this contract.
+        // This works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`], as the Rust compiler
+        // has no way of knowing the size of the `valhalla::baldr::DirectedEdge` struct and without that field Rust
+        // assumes that `ffi::DirectedEdge` is a zero-sized type (ZST).
+        // At the same time, Valhalla's entire ability to work with binary files (tilesets) relies on this contract.
         unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
     }
 

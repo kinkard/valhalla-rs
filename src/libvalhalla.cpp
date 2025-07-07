@@ -96,9 +96,10 @@ baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
 }
 
 DirectedEdgeSlice directededges(const GraphTile& tile) {
+  const uint32_t count = tile.header()->directededgecount();
   return DirectedEdgeSlice{
-    .ptr = tile.directededge(0),
-    .len = tile.header()->directededgecount(),
+    .ptr = count ? tile.directededge(0) : nullptr,
+    .len = count,
   };
 }
 
