@@ -21,6 +21,63 @@ mod ffi {
         value: u64,
     }
 
+    // Edge use type. Indicates specialized uses.
+    #[namespace = "valhalla::baldr"]
+    #[cxx_name = "Use"]
+    #[repr(u8)]
+    enum EdgeUse {
+        // Road specific uses
+        kRoad = 0,
+        kRamp = 1,            // Link - exits/entrance ramps.
+        kTurnChannel = 2,     // Link - turn lane.
+        kTrack = 3,           // Agricultural use, forest tracks
+        kDriveway = 4,        // Driveway/private service
+        kAlley = 5,           // Service road - limited route use
+        kParkingAisle = 6,    // Access roads in parking areas
+        kEmergencyAccess = 7, // Emergency vehicles only
+        kDriveThru = 8,       // Commercial drive-thru (banks/fast-food)
+        kCuldesac = 9,        // Cul-de-sac - dead-end road with possible circular end
+        kLivingStreet = 10,   // Streets with preference towards bicyclists and pedestrians
+        kServiceRoad = 11,    // Generic service road (not driveway, alley, parking aisle, etc.)
+
+        // Bicycle specific uses
+        kCycleway = 20,     // Dedicated bicycle path
+        kMountainBike = 21, // Mountain bike trail
+
+        kSidewalk = 24,
+
+        // Pedestrian specific uses
+        kFootway = 25,
+        kSteps = 26, // Stairs
+        kPath = 27,
+        kPedestrian = 28,
+        kBridleway = 29,
+        kPedestrianCrossing = 32, // cross walks
+        kElevator = 33,
+        kEscalator = 34,
+        kPlatform = 35,
+
+        // Rest/Service Areas
+        kRestArea = 30,
+        kServiceArea = 31,
+
+        // Other... currently, either BSS Connection or unspecified service road
+        kOther = 40,
+
+        // Ferry and rail ferry
+        kFerry = 41,
+        kRailFerry = 42,
+
+        kConstruction = 43, // Road under construction
+
+        // Transit specific uses. Must be last in the list
+        kRail = 50,               // Rail line
+        kBus = 51,                // Bus line
+        kEgressConnection = 52,   // Connection between transit station and transit egress
+        kPlatformConnection = 53, // Connection between transit station and transit platform
+        kTransitConnection = 54,  // Connection between road network and transit egress
+    }
+
     /// Directed edge within the graph.
     struct DirectedEdge {
         // With this definition and cxx's magic it becomes possible to do pointer arithmetic properly,
@@ -98,7 +155,14 @@ mod ffi {
         fn get_tile_traffic_flows(tile: &GraphTile) -> Vec<TrafficEdge>;
 
         #[namespace = "valhalla::baldr"]
+        #[cxx_name = "Use"]
+        type EdgeUse;
+
+        #[namespace = "valhalla::baldr"]
         type DirectedEdge;
+        /// Returns the specialized use type of the edge.
+        #[cxx_name = "use"]
+        fn use_type(self: &DirectedEdge) -> EdgeUse;
         /// Returns the length of the edge in meters.
         fn length(self: &DirectedEdge) -> u32;
         /// Returns the default speed in km/h for this edge.
@@ -126,6 +190,7 @@ pub struct LatLon(pub f32, pub f32);
 
 pub use ffi::DirectedEdge;
 pub use ffi::EdgeInfo;
+pub use ffi::EdgeUse;
 pub use ffi::GraphId;
 pub use ffi::GraphLevel;
 pub use ffi::TrafficEdge;
