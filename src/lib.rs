@@ -169,6 +169,8 @@ mod ffi {
         fn tile(self: &GraphId) -> GraphId;
         /// Identifier within the tile, unique within the tile and level.
         fn id(self: &GraphId) -> u32;
+        /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
+        fn from_parts(level: u32, tileid: u32, id: u32) -> Result<GraphId>;
 
         type TileSet;
         fn new_tileset(config: &CxxString) -> Result<SharedPtr<TileSet>>;
@@ -287,6 +289,12 @@ impl Hash for GraphId {
 impl GraphId {
     pub fn new(value: u64) -> Self {
         Self { value }
+    }
+
+    /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
+    /// Returns `None` if the level is invalid (greater than 7) or if the tile ID is invalid (greater than 2^22).
+    pub fn from_parts(level: u32, tileid: u32, id: u32) -> Option<Self> {
+        ffi::from_parts(level, tileid, id).ok()
     }
 }
 
@@ -472,13 +480,20 @@ mod tests {
         assert_eq!(id.level(), 2);
         assert_eq!(id.tileid(), 838852);
         assert_eq!(id.id(), 161285);
+        assert_eq!(
+            GraphId::from_parts(id.level(), id.tileid(), id.id()),
+            Some(id)
+        );
 
         let base = id.tile();
         assert_eq!(base.level(), 2);
         assert_eq!(base.tileid(), 838852);
         assert_eq!(base.id(), 0);
+        assert_eq!(GraphId::from_parts(id.level(), id.tileid(), 0), Some(base));
 
         let default_id = GraphId::default();
         assert_eq!(default_id.level(), 7);
+
+        assert_eq!(GraphId::from_parts(8, id.tileid(), 0), None);
     }
 }

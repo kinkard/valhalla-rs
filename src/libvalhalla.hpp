@@ -4,6 +4,7 @@
 
 #include "cxx.h"
 
+#include <cstdint>
 #include <memory>
 #include <unordered_map>
 
@@ -41,6 +42,11 @@ struct TileSet {
                                                     GraphLevel level) const;
   valhalla::baldr::graph_tile_ptr get_tile(valhalla::baldr::GraphId id) const;
 };
+
+/// Helper function as cxx unable to call constructors with arguments.
+inline valhalla::baldr::GraphId from_parts(uint32_t level, uint32_t tileid, uint32_t id) {
+  return valhalla::baldr::GraphId(tileid, level, id);
+}
 
 /// Creates a new [`TileSet`] instance based on a Valhalla's config json file or inline config.
 std::shared_ptr<TileSet> new_tileset(const std::string& config);
