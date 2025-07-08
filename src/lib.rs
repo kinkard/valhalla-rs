@@ -165,6 +165,10 @@ mod ffi {
         fn use_type(self: &DirectedEdge) -> EdgeUse;
         /// Returns the length of the edge in meters.
         fn length(self: &DirectedEdge) -> u32;
+        /// Access modes in the forward direction. Bit mask using [`crate::access`] constants.
+        fn forwardaccess(self: &DirectedEdge) -> u32;
+        /// Access modes in the reverse direction. Bit mask using [`crate::access`] constants.
+        fn reverseaccess(self: &DirectedEdge) -> u32;
         /// Returns the default speed in km/h for this edge.
         fn speed(self: &DirectedEdge) -> u32;
         /// Returns the free flow speed (typical speed during night, from 7pm to 7am) in km/h for this edge.
@@ -174,6 +178,23 @@ mod ffi {
         /// Is this edge a shortcut edge.
         fn is_shortcut(self: &DirectedEdge) -> bool;
     }
+}
+
+/// Access bit field constants. Access in directed edge allows 12 bits.
+pub mod access {
+    pub const AUTO: u32 = 1;
+    pub const PEDESTRIAN: u32 = 2;
+    pub const BICYCLE: u32 = 4;
+    pub const TRUCK: u32 = 8;
+    pub const EMERGENCY: u32 = 16;
+    pub const TAXI: u32 = 32;
+    pub const BUS: u32 = 64;
+    pub const HOV: u32 = 128;
+    pub const WHEELCHAIR: u32 = 256;
+    pub const MOPED: u32 = 512;
+    pub const MOTORCYCLE: u32 = 1024;
+    pub const ALL: u32 = 4095;
+    pub const VEHICULAR: u32 = AUTO | TRUCK | MOPED | MOTORCYCLE | TAXI | BUS | HOV;
 }
 
 // Safety: All operations do not mutate [`TileSet`] inner state.
