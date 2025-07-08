@@ -1,7 +1,7 @@
 use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
 
-use valhalla::{GraphId, GraphLevel, GraphReader, LatLon};
+use valhalla::{GraphId, GraphLevel, GraphReader, LatLon, TimeZoneInfo};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -68,6 +68,7 @@ fn tiles_in_bbox() {
             assert_eq!(tile_id.level(), level.repr as u32);
             // GraphId::id() is the index of the edge in the tile, which is always 0 for the tile itself
             assert_eq!(tile_id.id(), 0);
+            assert_eq!(tile_id.tile(), tile_id);
         }
     }
 }
@@ -118,5 +119,48 @@ fn edges_in_tile() {
             }
         }
         assert!(tile.directededge(slice.len()).is_none());
+
+        // Same check for nodes
+        let slice = tile.nodes();
+        assert!(!slice.is_empty(), "Tile should always have nodes");
+        for (i, node) in slice.iter().enumerate() {
+            // Ensure that the node index matches the slice index.
+            // This assertion ensures that the pointer arithmetic in the Rust FFI is correct.
+            let via_ptr = tile.node(i).unwrap();
+            assert_eq!(
+                node as *const _, via_ptr as *const _,
+                "node and via_ptr should have the same address"
+            );
+
+            // Europe/Andorra or Europe/Madrid or Europe/Paris timezones
+            assert!(matches!(node.timezone(), 293 | 313 | 319));
+        }
     }
+}
+
+#[test]
+fn tz_info() {
+    // Summer
+    let unix_timestamp = 1750000000; // Jun 15 2025
+    assert!(TimeZoneInfo::from_id(0, unix_timestamp).is_none());
+
+    let tz = TimeZoneInfo::from_id(293, unix_timestamp).unwrap();
+    assert_eq!(tz.name, "Europe/Andorra");
+    assert_eq!(tz.offset_seconds, 7200); // UTC+2
+
+    let tz = TimeZoneInfo::from_id(94, unix_timestamp).unwrap();
+    assert_eq!(tz.name, "America/Los_Angeles");
+    assert_eq!(tz.offset_seconds, -25200); // UTC-7
+
+    // Winter
+    let unix_timestamp = 1740000000; // Feb 19 2025
+    assert!(TimeZoneInfo::from_id(0, unix_timestamp).is_none());
+
+    let tz = TimeZoneInfo::from_id(293, unix_timestamp).unwrap();
+    assert_eq!(tz.name, "Europe/Andorra");
+    assert_eq!(tz.offset_seconds, 3600); // UTC+1
+
+    let tz = TimeZoneInfo::from_id(94, unix_timestamp).unwrap();
+    assert_eq!(tz.name, "America/Los_Angeles");
+    assert_eq!(tz.offset_seconds, -28800); // UTC-8
 }

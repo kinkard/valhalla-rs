@@ -1,6 +1,7 @@
 #include "libvalhalla.hpp"
 #include "valhalla/src/lib.rs.h"
 
+#include <valhalla/baldr/datetime.h>
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/baldr/rapidjson_utils.h>
 #include <valhalla/midgard/encoded.h>
@@ -103,6 +104,14 @@ DirectedEdgeSlice directededges(const GraphTile& tile) {
   };
 }
 
+NodeInfoSlice nodes(const GraphTile& tile) {
+  const uint32_t count = tile.header()->nodecount();
+  return NodeInfoSlice{
+    .ptr = count ? tile.node(0) : nullptr,
+    .len = count,
+  };
+}
+
 EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de) {
   const auto edge_info = tile.edgeinfo(&de);
 
@@ -161,4 +170,22 @@ rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile& tile) {
     }
   }
   return flows;
+}
+
+TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp) {
+  const date::time_zone* tz = valhalla::baldr::DateTime::get_tz_db().from_index(id);
+  if (!tz) {
+    throw std::runtime_error("Invalid time zone id: " + std::to_string(id));
+  }
+
+  // Because of DST, offset can change during some time of the year
+  std::chrono::seconds dur(unix_timestamp);
+  std::chrono::time_point<std::chrono::system_clock> tp(dur);
+  const auto zoned_tp = date::make_zoned(tz, tp);
+  const auto tz_info = zoned_tp.get_info();
+
+  return TimeZoneInfo{
+    .name = tz->name(),
+    .offset_seconds = static_cast<int32_t>(tz_info.offset.count()),
+  };
 }

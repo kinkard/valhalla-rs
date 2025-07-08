@@ -4,6 +4,15 @@ use std::{
     path::Path,
 };
 
+pub use ffi::DirectedEdge;
+pub use ffi::EdgeInfo;
+pub use ffi::EdgeUse;
+pub use ffi::GraphId;
+pub use ffi::GraphLevel;
+pub use ffi::NodeInfo;
+pub use ffi::TimeZoneInfo;
+pub use ffi::TrafficEdge;
+
 #[cxx::bridge]
 mod ffi {
     /// Hierarchical graph level that defines the type of roads and their importance.
@@ -98,6 +107,18 @@ mod ffi {
         shape: String,
     }
 
+    /// Information held for each node within the graph. The graph uses a forward star structure:
+    /// nodes point to the first outbound directed edge and each directed edge points to the other
+    /// end node of the edge.
+    struct NodeInfo {
+        // With this definition and cxx's magic it becomes possible to do pointer arithmetic properly,
+        // allowing to operate with slices of `NodeInfo` in Rust.
+        // Otherwise, Rust compiler has no way to know the size of the `NodeInfo` struct and assumes that
+        // `NodeInfo` is a zero-sized type (ZST), which leads to incorrect pointer arithmetic.
+        // The whole Valhalla's ability to work with binary files (tilesets) relies this contract.
+        data: [u64; 4],
+    }
+
     /// Representation of the road graph edge with traffic information that contains a subset of data
     /// stored in [`valhalla::baldr::DirectedEdge`] and [`valhalla::baldr::EdgeInfo`] that is exposed to Rust.
     struct TrafficEdge {
@@ -113,6 +134,23 @@ mod ffi {
         ptr: *const DirectedEdge,
         /// Number of directed edges in the span.
         len: usize,
+    }
+
+    /// Helper struct to return a slice of nodes from C++ to Rust.
+    struct NodeInfoSlice {
+        /// Pointer to the first node in the span.
+        ptr: *const NodeInfo,
+        /// Number of nodes in the span.
+        len: usize,
+    }
+
+    /// Information about the timezone, such as name and offset from UTC.
+    #[derive(Clone)]
+    struct TimeZoneInfo {
+        /// Timezone name in the tz database.
+        name: String,
+        /// Offset in seconds from UTC for the timezone.
+        offset_seconds: i32,
     }
 
     unsafe extern "C++" {
@@ -150,6 +188,8 @@ mod ffi {
         fn directededges(tile: &GraphTile) -> DirectedEdgeSlice;
         fn directededge(self: &GraphTile, index: usize) -> Result<*const DirectedEdge>;
         fn edgeinfo(tile: &GraphTile, de: &DirectedEdge) -> EdgeInfo;
+        fn nodes(tile: &GraphTile) -> NodeInfoSlice;
+        fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
         /// Retrieves all traffic flows for a given tile.
         /// todo: move it in Rust and implement via bindings.
         fn get_tile_traffic_flows(tile: &GraphTile) -> Vec<TrafficEdge>;
@@ -160,14 +200,18 @@ mod ffi {
 
         #[namespace = "valhalla::baldr"]
         type DirectedEdge;
+        /// End node of the directed edge.
+        fn endnode(self: &DirectedEdge) -> GraphId;
         /// Returns the specialized use type of the edge.
         #[cxx_name = "use"]
         fn use_type(self: &DirectedEdge) -> EdgeUse;
         /// Returns the length of the edge in meters.
         fn length(self: &DirectedEdge) -> u32;
         /// Access modes in the forward direction. Bit mask using [`crate::access`] constants.
+        #[rust_name = "forwardaccess_u32"]
         fn forwardaccess(self: &DirectedEdge) -> u32;
         /// Access modes in the reverse direction. Bit mask using [`crate::access`] constants.
+        #[rust_name = "reverseaccess_u32"]
         fn reverseaccess(self: &DirectedEdge) -> u32;
         /// Returns the default speed in km/h for this edge.
         fn speed(self: &DirectedEdge) -> u32;
@@ -177,24 +221,17 @@ mod ffi {
         fn constrained_flow_speed(self: &DirectedEdge) -> u32;
         /// Is this edge a shortcut edge.
         fn is_shortcut(self: &DirectedEdge) -> bool;
-    }
-}
 
-/// Access bit field constants. Access in directed edge allows 12 bits.
-pub mod access {
-    pub const AUTO: u32 = 1;
-    pub const PEDESTRIAN: u32 = 2;
-    pub const BICYCLE: u32 = 4;
-    pub const TRUCK: u32 = 8;
-    pub const EMERGENCY: u32 = 16;
-    pub const TAXI: u32 = 32;
-    pub const BUS: u32 = 64;
-    pub const HOV: u32 = 128;
-    pub const WHEELCHAIR: u32 = 256;
-    pub const MOPED: u32 = 512;
-    pub const MOTORCYCLE: u32 = 1024;
-    pub const ALL: u32 = 4095;
-    pub const VEHICULAR: u32 = AUTO | TRUCK | MOPED | MOTORCYCLE | TAXI | BUS | HOV;
+        #[namespace = "valhalla::baldr"]
+        type NodeInfo;
+        /// Access modes allowed to pass through the node. Bit mask using [`crate::access`] constants.
+        fn access(self: &NodeInfo) -> u16;
+        /// Time zone index of the node. Corresponding [`crate::TimeZoneInfo`] can be retrieved
+        /// using [`crate::TimeZoneInfo::from_id`].
+        fn timezone(self: &NodeInfo) -> u32;
+
+        fn from_id(id: u32, unix_timestamp: u64) -> Result<TimeZoneInfo>;
+    }
 }
 
 // Safety: All operations do not mutate [`TileSet`] inner state.
@@ -205,16 +242,26 @@ unsafe impl Sync for ffi::TileSet {}
 unsafe impl Send for ffi::GraphTile {}
 unsafe impl Sync for ffi::GraphTile {}
 
+/// Access bit field constants. Access in directed edge allows 12 bits.
+pub mod access {
+    pub const AUTO: u16 = 1;
+    pub const PEDESTRIAN: u16 = 2;
+    pub const BICYCLE: u16 = 4;
+    pub const TRUCK: u16 = 8;
+    pub const EMERGENCY: u16 = 16;
+    pub const TAXI: u16 = 32;
+    pub const BUS: u16 = 64;
+    pub const HOV: u16 = 128;
+    pub const WHEELCHAIR: u16 = 256;
+    pub const MOPED: u16 = 512;
+    pub const MOTORCYCLE: u16 = 1024;
+    pub const ALL: u16 = 4095;
+    pub const VEHICULAR: u16 = AUTO | TRUCK | MOPED | MOTORCYCLE | TAXI | BUS | HOV;
+}
+
 /// Coordinate in (lat, lon) format.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LatLon(pub f32, pub f32);
-
-pub use ffi::DirectedEdge;
-pub use ffi::EdgeInfo;
-pub use ffi::EdgeUse;
-pub use ffi::GraphId;
-pub use ffi::GraphLevel;
-pub use ffi::TrafficEdge;
 
 impl Default for GraphId {
     fn default() -> Self {
@@ -364,9 +411,54 @@ impl GraphTile {
         }
     }
 
+    pub fn nodes(&self) -> &[ffi::NodeInfo] {
+        let slice = ffi::nodes(&self.tile);
+        if slice.len == 0 {
+            return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
+        }
+
+        // Safety: correctness of the pointer arithmetic is checked by integration tests over a real dataset.
+        // This works only because of the `data: [u64; 4]` definition in [`ffi::NodeInfo`], as the Rust compiler
+        // has no way of knowing the size of the `valhalla::baldr::NodeInfo` struct and without that field Rust
+        // assumes that `ffi::NodeInfo` is a zero-sized type (ZST).
+        // At the same time, Valhalla's entire ability to work with binary files (tilesets) relies on this contract.
+        unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
+    }
+
+    /// Index of the node within the current tile if it exists.
+    pub fn node(&self, index: usize) -> Option<&ffi::NodeInfo> {
+        match self.tile.node(index) {
+            Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
+            // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
+            // But it also sounds nice to handle nullptr in the same way.
+            _ => None,
+        }
+    }
+
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
     pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
         ffi::edgeinfo(&self.tile, de)
+    }
+}
+
+impl DirectedEdge {
+    /// Access modes in the forward direction. Bit mask using [`crate::access`] constants.
+    #[inline(always)]
+    pub fn forwardaccess(&self) -> u16 {
+        self.forwardaccess_u32() as u16
+    }
+
+    /// Access modes in the reverse direction. Bit mask using [`crate::access`] constants.
+    #[inline(always)]
+    pub fn reverseaccess(&self) -> u16 {
+        self.reverseaccess_u32() as u16
+    }
+}
+
+impl TimeZoneInfo {
+    /// Retrieves the timezone information by its index if available. `unix_timestamp` is required to handle DST.
+    pub fn from_id(id: u32, unix_timestamp: u64) -> Option<Self> {
+        ffi::from_id(id, unix_timestamp).ok()
     }
 }
 

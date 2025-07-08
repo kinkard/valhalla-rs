@@ -54,6 +54,12 @@ fn main() {
     // bindings
     cxx_build::bridge("src/lib.rs")
         .file("src/libvalhalla.cpp")
+        // Hacky workaraound for linking issue because `get_formatted_date()` function is being called in header file
+        // and somehow compiler is unable to resolve it when building bridge library.
+        // ```
+        // const date::local_seconds pivot_date_ = get_formatted_date(kPivotDate + "T00:00");
+        // ```
+        .file("valhalla/src/baldr/datetime.cc")
         .std("c++17")
         .includes(valhalla_includes)
         // Should be defined to have consistent behavior with valhalla tile ref definition
