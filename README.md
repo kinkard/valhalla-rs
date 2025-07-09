@@ -2,6 +2,12 @@
 
 C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) to access road graph tiles, powered by [cxx](http://cxx.rs).
 
+Features:
+
+- [x] Reading Valhalla tiles and accessing information from road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`). *Not all getters are accessible from Rust*
+- [ ] Writing live traffic information directly to memory-mapped traffic.tar
+- [ ] Actor API (similar to [what is accessible from Python](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb)) for Valhalla's routing engine, allowing route building and other routing operations from Rust
+
 ## Usage
 
 Add this to your Cargo.toml:
@@ -13,7 +19,7 @@ valhalla = "0.3"
 
 ## Dependencies
 
-As Valhalla heavilly relies on system libraries, you need to install the following dependencies to build this project:
+Since Valhalla heavily relies on system libraries, you need to install the following dependencies to build this project:
 
 ```sh
 sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
@@ -21,7 +27,7 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg
 
 You can use the provided [Dockerfile](Dockerfile) as a reference for projects that want to use `valhalla-rs`. It demonstrates the necessary dependencies and environment setup.
 
-For more details check the [Valhalla documentation](https://valhalla.github.io/valhalla/building/#platform-specific-builds).
+For more details, check the [Valhalla documentation](https://valhalla.github.io/valhalla/building/#platform-specific-builds).
 
 ## License
 
