@@ -33,8 +33,8 @@ struct TileSet {
 
   std::unordered_map<uint64_t, std::pair<char*, size_t>> tiles_;
   std::unordered_map<uint64_t, std::pair<char*, size_t>> traffic_tiles_;
-  std::shared_ptr<valhalla::midgard::tar> archive_;
-  std::shared_ptr<valhalla::midgard::tar> traffic_archive_;
+  std::shared_ptr<valhalla::midgard::tar> tar_;
+  std::shared_ptr<valhalla::midgard::tar> traffic_tar_;
   uint64_t checksum_;
 
   rust::Vec<valhalla::baldr::GraphId> tiles() const;

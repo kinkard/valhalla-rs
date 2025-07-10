@@ -298,6 +298,7 @@ impl GraphId {
     }
 }
 
+/// High-level interface for reading Valhalla graph tiles from tar extracts.
 #[derive(Clone)]
 pub struct GraphReader {
     tileset: cxx::SharedPtr<ffi::TileSet>,
@@ -375,6 +376,9 @@ impl GraphReader {
 }
 
 /// Graph information for a tile within the Tiled Hierarchical Graph.
+///
+/// `GraphTile` can outlive the [`GraphReader`] that created it. Cloning is cheap as it only
+/// copies an atomic shared pointer (C++'s version of [`std::sync::Arc`]) to the underlying tile data.
 #[derive(Clone)]
 pub struct GraphTile {
     tile: cxx::SharedPtr<ffi::GraphTile>,

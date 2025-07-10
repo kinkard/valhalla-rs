@@ -12,7 +12,9 @@ namespace midgard = valhalla::midgard;
 namespace {
 
 struct GraphMemory : public baldr::GraphMemory {
-  GraphMemory(std::pair<char*, size_t> position) {
+  const std::shared_ptr<midgard::tar> tar_;
+
+  GraphMemory(std::shared_ptr<midgard::tar> tar, std::pair<char*, size_t> position) : tar_(std::move(tar)) {
     data = position.first;
     size = position.second;
   }
@@ -30,8 +32,8 @@ std::shared_ptr<TileSet> new_tileset(const std::string& config) {
       return TileSet{
         .tiles_ = std::move(extract.tiles),
         .traffic_tiles_ = std::move(extract.traffic_tiles),
-        .archive_ = std::move(extract.archive),
-        .traffic_archive_ = std::move(extract.traffic_archive),
+        .tar_ = std::move(extract.archive),
+        .traffic_tar_ = std::move(extract.traffic_archive),
         .checksum_ = extract.checksum,
       };
     }
@@ -47,7 +49,7 @@ std::shared_ptr<TileSet> new_tileset(const std::string& config) {
   }
 
   auto tile_set = TileSetReader::create(pt.get_child("mjolnir"));
-  if (!tile_set.archive_) {
+  if (!tile_set.tar_) {
     throw std::runtime_error("Failed to load tile extract from");
   }
   return std::make_shared<TileSet>(std::move(tile_set));
@@ -90,10 +92,11 @@ baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
 
   // Optionally get the traffic tile if it exists
   auto traffic_it = traffic_tiles_.find(base);
-  auto traffic = traffic_it != traffic_tiles_.end() ? std::make_unique<GraphMemory>(traffic_it->second) : nullptr;
+  auto traffic =
+      traffic_it != traffic_tiles_.end() ? std::make_unique<GraphMemory>(traffic_tar_, traffic_it->second) : nullptr;
 
   // This initializes the tile from mmap
-  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tile_it->second), std::move(traffic));
+  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tar_, tile_it->second), std::move(traffic));
 }
 
 DirectedEdgeSlice directededges(const GraphTile& tile) {

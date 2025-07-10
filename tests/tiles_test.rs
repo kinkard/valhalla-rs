@@ -19,6 +19,40 @@ const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
 const ANDORRA_BBOX: (LatLon, LatLon) = (LatLon(42.373627, 1.301427), LatLon(42.72199, 1.892865));
 
 #[test]
+fn tile_can_outlive_reader() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+    let reader =
+        GraphReader::from_json(&json::to_string(&config)).expect("Failed to create GraphReader");
+
+    let tile = reader.get_tile(reader.tiles()[0]).unwrap();
+    // just do something complicated with the tile
+    let count = tile
+        .directededges()
+        .iter()
+        .filter(|e| tile.edgeinfo(e).speed_limit == 0)
+        .count();
+    assert_ne!(count, 0);
+
+    // Dropping reader should not affect the tile and its data
+    drop(reader);
+
+    let other_count = tile
+        .directededges()
+        .iter()
+        .filter(|e| tile.edgeinfo(e).speed_limit == 0)
+        .count();
+    assert_eq!(
+        count, other_count,
+        "Tile should remain valid after reader is dropped"
+    );
+}
+
+#[test]
 fn tiles_in_bbox() {
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
