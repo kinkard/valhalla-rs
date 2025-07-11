@@ -134,7 +134,7 @@ fn edges_in_tile() {
         for (i, de) in slice.iter().enumerate() {
             // Ensure that the directed edge index matches the slice index.
             // This assertion ensures that the pointer arithmetic in the Rust FFI is correct.
-            let via_ptr = tile.directededge(i).unwrap();
+            let via_ptr = tile.directededge(i as u32).unwrap();
             assert_eq!(
                 de as *const _, via_ptr as *const _,
                 "de and via_ptr should have the same address"
@@ -152,7 +152,7 @@ fn edges_in_tile() {
                 assert_ne!(ei.way_id, 0, "Non-shortcuts should have valid way_id");
             }
         }
-        assert!(tile.directededge(slice.len()).is_none());
+        assert!(tile.directededge(slice.len() as u32).is_none());
 
         // Same check for nodes
         let slice = tile.nodes();
@@ -160,7 +160,7 @@ fn edges_in_tile() {
         for (i, node) in slice.iter().enumerate() {
             // Ensure that the node index matches the slice index.
             // This assertion ensures that the pointer arithmetic in the Rust FFI is correct.
-            let via_ptr = tile.node(i).unwrap();
+            let via_ptr = tile.node(i as u32).unwrap();
             assert_eq!(
                 node as *const _, via_ptr as *const _,
                 "node and via_ptr should have the same address"

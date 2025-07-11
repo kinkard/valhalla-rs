@@ -414,8 +414,8 @@ impl GraphTile {
     }
 
     /// Index of the directed edge within the current tile if it exists.
-    pub fn directededge(&self, index: usize) -> Option<&ffi::DirectedEdge> {
-        match self.tile.directededge(index) {
+    pub fn directededge(&self, index: u32) -> Option<&ffi::DirectedEdge> {
+        match self.tile.directededge(index as usize) {
             Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
             // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
             // But it also sounds nice to handle nullptr in the same way.
@@ -438,8 +438,8 @@ impl GraphTile {
     }
 
     /// Index of the node within the current tile if it exists.
-    pub fn node(&self, index: usize) -> Option<&ffi::NodeInfo> {
-        match self.tile.node(index) {
+    pub fn node(&self, index: u32) -> Option<&ffi::NodeInfo> {
+        match self.tile.node(index as usize) {
             Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
             // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
             // But it also sounds nice to handle nullptr in the same way.
