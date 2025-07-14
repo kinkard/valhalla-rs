@@ -1,6 +1,6 @@
 [package]
 name = "valhalla"
-version = "0.3.13"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust bindings for Valhalla routing engine"
@@ -34,6 +34,7 @@ exclude = [
 ]
 
 [dependencies]
+bitflags = "2.9.1"
 cxx = { version = "1.0", features = ["c++17"] }
 
 [build-dependencies]

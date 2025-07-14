@@ -16,7 +16,6 @@ struct DirectedEdgeSlice;
 struct EdgeInfo;
 struct NodeInfoSlice;
 struct TimeZoneInfo;
-struct TrafficEdge;
 
 enum class GraphLevel : uint8_t {
   Highway = 0,
@@ -64,9 +63,8 @@ NodeInfoSlice nodes(const GraphTile& tile);
 /// Helper function that workarounds the inability to use `baldr::EdgeInfo` in Rust
 EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
 
-/// Retrieves all traffic flows for a given tile.
-/// todo: move it in Rust and implement via bindings
-rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile& tile);
+/// Helper method that returns 0 if the edge is closed, 255 if live speed in unknown and speed in km/h otherwise
+uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
 
 /// Helper function to resolve tz name and offset from a given id and unix timestamp.
 TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp);

@@ -4,6 +4,8 @@ use std::{
     path::Path,
 };
 
+use bitflags::bitflags;
+
 pub use ffi::DirectedEdge;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
@@ -11,7 +13,6 @@ pub use ffi::GraphId;
 pub use ffi::GraphLevel;
 pub use ffi::NodeInfo;
 pub use ffi::TimeZoneInfo;
-pub use ffi::TrafficEdge;
 
 #[cxx::bridge]
 mod ffi {
@@ -119,15 +120,6 @@ mod ffi {
         data: [u64; 4],
     }
 
-    /// Representation of the road graph edge with traffic information that contains a subset of data
-    /// stored in [`valhalla::baldr::DirectedEdge`] and [`valhalla::baldr::EdgeInfo`] that is exposed to Rust.
-    struct TrafficEdge {
-        /// polyline6 encoded shape of the edge
-        shape: String,
-        /// Ratio between live speed and speed limit (or default edge speed if speed limit is unavailable).
-        normalized_speed: f32,
-    }
-
     /// Helper struct to return a slice of directed edges from C++ to Rust.
     struct DirectedEdgeSlice {
         /// Pointer to the first directed edge in the span.
@@ -192,9 +184,18 @@ mod ffi {
         fn edgeinfo(tile: &GraphTile, de: &DirectedEdge) -> EdgeInfo;
         fn nodes(tile: &GraphTile) -> NodeInfoSlice;
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
-        /// Retrieves all traffic flows for a given tile.
-        /// todo: move it in Rust and implement via bindings.
-        fn get_tile_traffic_flows(tile: &GraphTile) -> Vec<TrafficEdge>;
+        unsafe fn IsClosed(self: &GraphTile, de: *const DirectedEdge) -> bool;
+        unsafe fn GetSpeed(
+            self: &GraphTile,
+            de: *const DirectedEdge,
+            flow_mask: u8,
+            seconds: u64,
+            is_truck: bool,
+            flow_sources: *mut u8,
+            seconds_from_now: u64,
+        ) -> u32;
+        // Helper method that returns 0 if the edge is closed, 255 if live speed in unknown and speed in km/h otherwise.
+        fn live_speed(tile: &GraphTile, de: &DirectedEdge) -> u8;
 
         #[namespace = "valhalla::baldr"]
         #[cxx_name = "Use"]
@@ -217,6 +218,8 @@ mod ffi {
         fn reverseaccess(self: &DirectedEdge) -> u32;
         /// Returns the default speed in km/h for this edge.
         fn speed(self: &DirectedEdge) -> u32;
+        /// Returns the truck speed in km/h for this edge.
+        fn truck_speed(self: &DirectedEdge) -> u32;
         /// Returns the free flow speed (typical speed during night, from 7pm to 7am) in km/h for this edge.
         fn free_flow_speed(self: &DirectedEdge) -> u32;
         /// Returns the constrained flow speed (typical speed during day, from 7am to 7pm) in km/h for this edge.
@@ -244,21 +247,44 @@ unsafe impl Sync for ffi::TileSet {}
 unsafe impl Send for ffi::GraphTile {}
 unsafe impl Sync for ffi::GraphTile {}
 
-/// Access bit field constants. Access in directed edge allows 12 bits.
-pub mod access {
-    pub const AUTO: u16 = 1;
-    pub const PEDESTRIAN: u16 = 2;
-    pub const BICYCLE: u16 = 4;
-    pub const TRUCK: u16 = 8;
-    pub const EMERGENCY: u16 = 16;
-    pub const TAXI: u16 = 32;
-    pub const BUS: u16 = 64;
-    pub const HOV: u16 = 128;
-    pub const WHEELCHAIR: u16 = 256;
-    pub const MOPED: u16 = 512;
-    pub const MOTORCYCLE: u16 = 1024;
-    pub const ALL: u16 = 4095;
-    pub const VEHICULAR: u16 = AUTO | TRUCK | MOPED | MOTORCYCLE | TAXI | BUS | HOV;
+bitflags! {
+    /// Access bit field constants. Access in directed edge allows 12 bits.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Access: u16 {
+        const AUTO = 1;
+        const PEDESTRIAN = 2;
+        const BICYCLE = 4;
+        const TRUCK = 8;
+        const EMERGENCY = 16;
+        const TAXI = 32;
+        const BUS = 64;
+        const HOV = 128;
+        const WHEELCHAIR = 256;
+        const MOPED = 512;
+        const MOTORCYCLE = 1024;
+        const ALL = 4095;
+        const VEHICULAR = Self::AUTO.bits() | Self::TRUCK.bits() | Self::MOPED.bits() | Self::MOTORCYCLE.bits()
+                        | Self::TAXI.bits() | Self::BUS.bits() | Self::HOV.bits();
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct SpeedSources: u8 {
+        /// Default edge speed - speed limit if available, otherwise typical speed for the edge type.
+        const NO_FLOW = 0;
+        /// Typical (average historical) speed during the night, from 7pm to 7am.
+        const FREE_FLOW = 1;
+        /// Typical (average historical) speed during the day, from 7am to 7pm.
+        const CONSTRAINED_FLOW = 2;
+        /// Historical traffic speed, stored in 5m buckets over the week.
+        const PREDICTED_FLOW = 4;
+        /// Live-traffic speed.
+        const CURRENT_FLOW = 8;
+        /// All available speed sources.
+        const ALL = Self::FREE_FLOW.bits() | Self::CONSTRAINED_FLOW.bits()
+                  | Self::PREDICTED_FLOW.bits() | Self::CURRENT_FLOW.bits();
+    }
 }
 
 /// Coordinate in (lat, lon) format.
@@ -365,14 +391,6 @@ impl GraphReader {
         self.tileset
             .tiles_in_bbox(min.0, min.1, max.0, max.1, level)
     }
-
-    pub fn get_tile_traffic_flows(&self, id: GraphId) -> Vec<TrafficEdge> {
-        self.tileset
-            .get_tile(id)
-            .as_ref()
-            .map(ffi::get_tile_traffic_flows)
-            .unwrap_or_default()
-    }
 }
 
 /// Graph information for a tile within the Tiled Hierarchical Graph.
@@ -451,19 +469,64 @@ impl GraphTile {
     pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
         ffi::edgeinfo(&self.tile, de)
     }
+
+    /// Edge's live traffic speed in km/h if available. Returns `Some(0)` if the edge is closed due to traffic.
+    pub fn live_speed(&self, de: &ffi::DirectedEdge) -> Option<u32> {
+        match ffi::live_speed(&self.tile, de) {
+            0 => Some(0), // Edge is closed due to traffic
+            255 => None,  // Live speed is unknown
+            speed => Some(speed as u32),
+        }
+    }
+
+    /// Convenience method to determine whether an edge is currently closed
+    /// due to traffic. Roads are considered closed when the following are true
+    ///   a) have traffic data for that tile
+    ///   b) we have a valid record for that edge
+    ///   b) the speed is zero
+    pub fn edge_closed(&self, de: &ffi::DirectedEdge) -> bool {
+        unsafe { self.tile.IsClosed(de as *const ffi::DirectedEdge) }
+    }
+
+    /// Overall edge speed, mixed from different [`SpeedSources`] in km/h. As not all requested speed sources may be
+    /// available for the edge, this function returns `(speed_kmh: u32, sources: SpeedSources)` tuple.
+    ///
+    /// This function never returns zero speed, even if the edge is closed due to traffic. [`GraphTile::edge_closed`]
+    ///  or [`GraphTile::live_speed`] should be used to determine if the edge is closed instead.
+    pub fn edge_speed(
+        &self,
+        de: &ffi::DirectedEdge,
+        speed_sources: SpeedSources,
+        is_truck: bool,
+        second_of_week: u64,
+        seconds_from_now: u64,
+    ) -> (u32, SpeedSources) {
+        let mut flow_sources: u8 = 0;
+        let speed = unsafe {
+            self.tile.GetSpeed(
+                de as *const ffi::DirectedEdge,
+                speed_sources.bits(),
+                second_of_week,
+                is_truck,
+                &mut flow_sources,
+                seconds_from_now,
+            )
+        };
+        (speed, SpeedSources::from_bits_retain(flow_sources))
+    }
 }
 
 impl DirectedEdge {
     /// Access modes in the forward direction. Bit mask using [`crate::access`] constants.
     #[inline(always)]
-    pub fn forwardaccess(&self) -> u16 {
-        self.forwardaccess_u32() as u16
+    pub fn forwardaccess(&self) -> Access {
+        Access::from_bits_retain(self.forwardaccess_u32() as u16)
     }
 
     /// Access modes in the reverse direction. Bit mask using [`crate::access`] constants.
     #[inline(always)]
-    pub fn reverseaccess(&self) -> u16 {
-        self.reverseaccess_u32() as u16
+    pub fn reverseaccess(&self) -> Access {
+        Access::from_bits_retain(self.reverseaccess_u32() as u16)
     }
 }
 

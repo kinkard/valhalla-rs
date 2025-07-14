@@ -144,6 +144,21 @@ fn edges_in_tile() {
             assert_eq!(de.free_flow_speed(), 0);
             assert_eq!(de.constrained_flow_speed(), 0);
             assert_ne!(de.speed(), 0, "Default edge's speed should never be zero");
+            assert_eq!(tile.live_speed(de), None);
+            assert_eq!(tile.edge_closed(de), false);
+            assert_eq!(
+                tile.edge_speed(de, valhalla::SpeedSources::ALL, false, 0, 0),
+                (de.speed(), valhalla::SpeedSources::NO_FLOW)
+            );
+            let truck_speed = if de.truck_speed() > 0 {
+                de.truck_speed()
+            } else {
+                de.speed()
+            };
+            assert_eq!(
+                tile.edge_speed(de, valhalla::SpeedSources::ALL, true, 0, 0),
+                (truck_speed, valhalla::SpeedSources::NO_FLOW)
+            );
 
             let ei = tile.edgeinfo(de);
             if de.is_shortcut() {

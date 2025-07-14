@@ -139,40 +139,15 @@ EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de
   };
 }
 
-rust::Vec<TrafficEdge> get_tile_traffic_flows(const GraphTile& tile) {
-  const auto& traffic_tile = tile.get_traffic_tile();
-  if (!traffic_tile()) {
-    return {};
+uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de) {
+  const volatile auto& live_speed_data = tile.trafficspeed(&de);
+  if (!live_speed_data.speed_valid()) {
+    return 255;  // No valid live speed data
   }
-
-  rust::Vec<TrafficEdge> flows;
-  flows.reserve(traffic_tile.header->directed_edge_count);
-  for (uint32_t i = 0; i < traffic_tile.header->directed_edge_count; ++i) {
-    const volatile auto& live_speed = traffic_tile.speeds[i];
-    if (live_speed.speed_valid()) {
-      const auto* de = tile.directededge(i);
-      const auto edge_info = tile.edgeinfo(de);
-
-      float normalized_speed = 0.0;
-      if (!live_speed.closed()) {
-        const uint32_t speed = tile.GetSpeed(de, baldr::kDefaultFlowMask);
-        uint32_t road_speed = 0;
-        for (const uint32_t speed : { edge_info.speed_limit(), de->free_flow_speed(), de->speed() }) {
-          road_speed = speed;
-          if (speed != 0 && speed != baldr::kUnlimitedSpeedLimit) {
-            break;
-          }
-        }
-        normalized_speed = static_cast<float>(speed) / road_speed;
-      }
-
-      flows.push_back(TrafficEdge{
-          .shape = midgard::encode(edge_info.shape()),
-          .normalized_speed = normalized_speed,
-      });
-    }
+  if (live_speed_data.closed()) {
+    return 0;  // Edge is closed
   }
-  return flows;
+  return live_speed_data.get_overall_speed();
 }
 
 TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp) {

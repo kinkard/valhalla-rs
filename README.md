@@ -14,7 +14,7 @@ Add this to your Cargo.toml:
 
 ```toml
 [dependencies]
-valhalla = "0.3"
+valhalla = "0.4"
 ```
 
 ## Dependencies
