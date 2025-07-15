@@ -3,7 +3,6 @@
 
 #include <valhalla/baldr/datetime.h>
 #include <valhalla/baldr/graphreader.h>
-#include <valhalla/baldr/rapidjson_utils.h>
 #include <valhalla/midgard/encoded.h>
 
 namespace baldr = valhalla::baldr;
@@ -24,7 +23,7 @@ struct GraphMemory : public baldr::GraphMemory {
 
 TileSet::~TileSet() {}
 
-std::shared_ptr<TileSet> new_tileset(const std::string& config) {
+std::shared_ptr<TileSet> new_tileset(const boost::property_tree::ptree& pt) {
   // Hack to expose protected `baldr::GraphReader::tile_extract_t`
   struct TileSetReader : public baldr::GraphReader {
     static TileSet create(const boost::property_tree::ptree& pt) {
@@ -38,15 +37,6 @@ std::shared_ptr<TileSet> new_tileset(const std::string& config) {
       };
     }
   };
-
-  // `valhalla::config` uses singleton to load config only once which is not suitable for this library
-  boost::property_tree::ptree pt;
-  if (config.find('{') != std::string::npos) {  // `{` is illegal in file names on most systems
-    auto inline_config = std::stringstream(config);
-    rapidjson::read_json(inline_config, pt);
-  } else {
-    rapidjson::read_json(config, pt);
-  }
 
   auto tile_set = TileSetReader::create(pt.get_child("mjolnir"));
   if (!tile_set.tar_) {

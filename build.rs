@@ -52,7 +52,7 @@ fn main() {
         .unwrap();
 
     // bindings
-    cxx_build::bridge("src/lib.rs")
+    cxx_build::bridges(["src/lib.rs", "src/config.rs"])
         .file("src/libvalhalla.cpp")
         // Hacky workaraound for linking issue because `get_formatted_date()` function is being called in header file
         // and somehow compiler is unable to resolve it when building bridge library.

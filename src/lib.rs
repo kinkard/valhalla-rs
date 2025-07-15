@@ -1,11 +1,13 @@
-use std::{
-    hash::{Hash, Hasher},
-    os::unix::ffi::OsStrExt,
-    path::Path,
-};
+use std::hash::{Hash, Hasher};
 
+use anyhow::Result;
 use bitflags::bitflags;
 
+mod config;
+
+pub use actor::Actor;
+pub use actor::proto;
+pub use config::Config;
 pub use ffi::DirectedEdge;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
@@ -164,8 +166,11 @@ mod ffi {
         /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
         fn from_parts(level: u32, tileid: u32, id: u32) -> Result<GraphId>;
 
+        #[namespace = "boost::property_tree"]
+        type ptree = crate::config::ffi::ptree;
+
         type TileSet;
-        fn new_tileset(config: &CxxString) -> Result<SharedPtr<TileSet>>;
+        fn new_tileset(config: &ptree) -> Result<SharedPtr<TileSet>>;
         fn tiles(self: &TileSet) -> Vec<GraphId>;
         fn tiles_in_bbox(
             self: &TileSet,
@@ -326,70 +331,33 @@ impl GraphId {
 
 /// High-level interface for reading Valhalla graph tiles from tar extracts.
 #[derive(Clone)]
-pub struct GraphReader {
-    tileset: cxx::SharedPtr<ffi::TileSet>,
-}
+pub struct GraphReader(cxx::SharedPtr<ffi::TileSet>);
 
 impl GraphReader {
-    /// Creates a new GraphReader from the given Valhalla configuration file.
+    /// Creates a new GraphReader from the given Valhalla configuration, parsed into a [`Config`].
     /// ```rust
-    /// let reader = valhalla::GraphReader::from_file("path/to/config.json");
+    /// let Ok(config) = valhalla::Config::from_file("path/to/config.json") else {
+    ///     return; // Handle error appropriately
+    /// };
+    /// let reader = valhalla::GraphReader::new(&config);
     /// ```
-    pub fn from_file(config_file: impl AsRef<Path>) -> Option<Self> {
-        cxx::let_cxx_string!(cxx_str = config_file.as_ref().as_os_str().as_bytes());
-        let tileset = match ffi::new_tileset(&cxx_str) {
-            Ok(tileset) => tileset,
-            Err(err) => {
-                println!("Failed to load tileset: {err:#}");
-                return None;
-            }
-        };
-        Some(Self { tileset })
-    }
-
-    /// Creates a new GraphReader from a Valhalla configuration JSON string.
-    /// ```rust
-    /// let config = r#"{"mjolnir":{"tile_extract":"path/to/tiles.tar","traffic_extract":"path/to/traffic.tar"}}"#;
-    /// let reader = valhalla::GraphReader::from_json(&config);
-    /// ```
-    pub fn from_json(config_json: &str) -> Option<Self> {
-        cxx::let_cxx_string!(cxx_str = config_json.as_bytes());
-        let tileset = match ffi::new_tileset(&cxx_str) {
-            Ok(tileset) => tileset,
-            Err(err) => {
-                println!("Failed to load tileset: {err:#}");
-                return None;
-            }
-        };
-        Some(Self { tileset })
-    }
-
-    /// Creates a new GraphReader from path to the tiles tar extract.
-    /// ```rust
-    /// let reader = valhalla::GraphReader::from_tile_extract("path/to/tiles.tar");
-    /// ```
-    pub fn from_tile_extract(tile_extract: impl AsRef<Path>) -> Option<Self> {
-        let config = format!(
-            "{{\"mjolnir\":{{\"tile_extract\":\"{}\"}}}}",
-            tile_extract.as_ref().display()
-        );
-        Self::from_json(&config)
+    pub fn new(config: &Config) -> Result<Self> {
+        Ok(Self(ffi::new_tileset(config.inner())?))
     }
 
     /// Graph tile object at given GraphId if it exists in the tileset.
     pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
-        GraphTile::new(self.tileset.get_tile(id))
+        GraphTile::new(self.0.get_tile(id))
     }
 
     /// List all tiles in the tileset.
     pub fn tiles(&self) -> Vec<GraphId> {
-        self.tileset.tiles()
+        self.0.tiles()
     }
 
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.
     pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<GraphId> {
-        self.tileset
-            .tiles_in_bbox(min.0, min.1, max.0, max.1, level)
+        self.0.tiles_in_bbox(min.0, min.1, max.0, max.1, level)
     }
 }
 

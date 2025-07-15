@@ -3,7 +3,7 @@ use std::{io::Write, path::PathBuf};
 use miniserde::{Serialize, json};
 use tempfile::NamedTempFile;
 
-use valhalla::GraphReader;
+use valhalla::{Config, GraphReader};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -21,7 +21,13 @@ const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
 
 #[test]
 fn from_file() {
-    assert!(GraphReader::from_file(PathBuf::default()).is_none());
+    assert!(Config::from_file(PathBuf::default()).is_err());
+
+    // bad json
+    let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
+    file.write_all("{{{".as_bytes())
+        .expect("Failed to write config");
+    assert!(Config::from_file(file.path()).is_err());
 
     // bad config
     let config = ValhallaConfig {
@@ -33,7 +39,9 @@ fn from_file() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::from_file(file.path()).is_none());
+    // Config just ensures that the file is valid JSON. `GraphReader` will check the paths.
+    let config = Config::from_file(file.path()).unwrap();
+    assert!(GraphReader::new(&config).is_err());
 
     // tiles only
     let config = ValhallaConfig {
@@ -45,7 +53,9 @@ fn from_file() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::from_file(file.path()).is_some());
+    // Config just ensures that the file is valid JSON. `GraphReader` will check the paths.
+    let config = Config::from_file(file.path()).unwrap();
+    assert!(GraphReader::new(&config).is_ok());
 
     // traffic only
     let config = ValhallaConfig {
@@ -57,7 +67,9 @@ fn from_file() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::from_file(file.path()).is_none());
+    // Config just ensures that the file is valid JSON. `GraphReader` will check the paths.
+    let config = Config::from_file(file.path()).unwrap();
+    assert!(GraphReader::new(&config).is_err());
 
     // tiles and traffic
     let config = ValhallaConfig {
@@ -69,13 +81,17 @@ fn from_file() {
     let mut file = NamedTempFile::new().expect("Failed to create temp file for config");
     file.write_all(json::to_string(&config).as_bytes())
         .expect("Failed to write config");
-    assert!(GraphReader::from_file(file.path()).is_some());
+    // Config just ensures that the file is valid JSON. `GraphReader` will check the paths.
+    let config = Config::from_file(file.path()).unwrap();
+    assert!(GraphReader::new(&config).is_ok());
 }
 
 #[test]
 fn from_json() {
-    assert!(GraphReader::from_json("").is_none());
-    assert!(GraphReader::from_json("{}").is_none());
+    assert!(Config::from_json("").is_err());
+    assert!(Config::from_json("{").is_err());
+    assert!(Config::from_json("}").is_err());
+    assert!(Config::from_json("{}").is_ok());
 
     // bad config
     let config = ValhallaConfig {
@@ -84,7 +100,8 @@ fn from_json() {
             traffic_extract: "bad_path_to_traffic_extract".into(),
         },
     };
-    assert!(GraphReader::from_json(&json::to_string(&config)).is_none());
+    let config = Config::from_json(&json::to_string(&config)).unwrap();
+    assert!(GraphReader::new(&config).is_err());
 
     // tiles and traffic ok
     let config = ValhallaConfig {
@@ -93,12 +110,15 @@ fn from_json() {
             traffic_extract: ANDORRA_TRAFFIC.into(),
         },
     };
-    assert!(GraphReader::from_json(&json::to_string(&config)).is_some());
+    let config = Config::from_json(&json::to_string(&config)).unwrap();
+    assert!(GraphReader::new(&config).is_ok());
 }
 
 #[test]
-fn from_tiles() {
-    assert!(GraphReader::from_tile_extract("").is_none());
-    assert!(GraphReader::from_tile_extract("bad_path_to_tile_extract").is_none());
-    assert!(GraphReader::from_tile_extract(ANDORRA_TILES).is_some());
+fn from_tile_extract() {
+    assert!(GraphReader::new(&Config::from_tile_extract("").unwrap()).is_err());
+    assert!(
+        GraphReader::new(&Config::from_tile_extract("bad_path_to_tile_extract").unwrap()).is_err()
+    );
+    assert!(GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).is_ok());
 }

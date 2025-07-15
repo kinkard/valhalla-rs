@@ -1,7 +1,7 @@
 use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
 
-use valhalla::{GraphId, GraphLevel, GraphReader, LatLon, TimeZoneInfo};
+use valhalla::{Config, GraphId, GraphLevel, GraphReader, LatLon, TimeZoneInfo};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -26,8 +26,8 @@ fn tile_can_outlive_reader() {
             traffic_extract: ANDORRA_TRAFFIC.into(),
         },
     };
-    let reader =
-        GraphReader::from_json(&json::to_string(&config)).expect("Failed to create GraphReader");
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
 
     let tile = reader.get_tile(reader.tiles()[0]).unwrap();
     // just do something complicated with the tile
@@ -60,8 +60,8 @@ fn tiles_in_bbox() {
             traffic_extract: ANDORRA_TRAFFIC.into(),
         },
     };
-    let reader =
-        GraphReader::from_json(&json::to_string(&config)).expect("Failed to create GraphReader");
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
 
     let mut all_tiles = reader.tiles();
     all_tiles.sort_by_key(|id| id.value); // order is not guaranteed, sort for comparison
@@ -115,8 +115,8 @@ fn edges_in_tile() {
             traffic_extract: ANDORRA_TRAFFIC.into(),
         },
     };
-    let reader =
-        GraphReader::from_json(&json::to_string(&config)).expect("Failed to create GraphReader");
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
 
     assert!(
         reader.get_tile(GraphId::default()).is_none(),
