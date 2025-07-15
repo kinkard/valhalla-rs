@@ -1,6 +1,6 @@
 [package]
 name = "valhalla"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust bindings for Valhalla routing engine"
@@ -14,23 +14,30 @@ exclude = [
     "**/.github/*",
     "**/test/*",
     "**/tests/*",
+    "**/doctest/*",
+    "**/gtest/*",
     "**/googletest/*",
     "**/googlemock/*",
     "**/doc/*",
     "**/docs/*",
-    "**/doctest/*",
     "**/bench/*",
+    "**/benchmarks/*",
+    "**/example/*",
+    "**/examples/*",
 
     "valhalla/CHANGELOG.md",
-    "valhalla/run_route_scripts/*",
+    "valhalla/run_route_scripts",
+    "valhalla/src/bindings",
     "valhalla/taginfo.json",
-    "valhalla/test_requests/*",
+    "valhalla/test_requests",
     # Somehow, valhalla/LICENSE.md is required for cmake, so all unused docs are excluded in a more specific way.
     "valhalla/third_party/**/*.md",
     # Python bindings and other files not needed for Rust bindings
     "valhalla/third_party/pybind11/*",
     "valhalla/third_party/rapidjson/bin/*",
     "valhalla/third_party/tz/NEWS",
+    "valhalla/third_party/tz/*.html",
+    "valhalla/third_party/unordered_dense/data",
 ]
 
 [dependencies]
