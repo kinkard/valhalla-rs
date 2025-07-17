@@ -42,15 +42,17 @@ exclude = [
 ]
 
 [dependencies]
-anyhow = "1.0.98"
-bitflags = "2.9.1"
+anyhow = "1.0"
+bitflags = "2.9"
 cxx = { version = "1.0", features = ["c++17"] }
+prost = "0.14"
 
 [build-dependencies]
 cmake = "0.1"
 cxx-build = "1.0"
-miniserde = "0.1"  # For compile_commands.json parsing
+miniserde = "0.1"    # For compile_commands.json parsing
 pkg-config = "0.3"
+prost-build = "0.14"
 
 [dev-dependencies]
 miniserde = "0.1"

@@ -3,9 +3,11 @@ use std::hash::{Hash, Hasher};
 use anyhow::Result;
 use bitflags::bitflags;
 
+mod actor;
 mod config;
 
 pub use actor::Actor;
+pub use actor::Response;
 pub use actor::proto;
 pub use config::Config;
 pub use ffi::DirectedEdge;
@@ -294,7 +296,16 @@ bitflags! {
 
 /// Coordinate in (lat, lon) format.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct LatLon(pub f32, pub f32);
+pub struct LatLon(pub f64, pub f64);
+
+impl From<LatLon> for proto::LatLng {
+    fn from(loc: LatLon) -> Self {
+        proto::LatLng {
+            has_lat: Some(proto::lat_lng::HasLat::Lat(loc.0)),
+            has_lng: Some(proto::lat_lng::HasLng::Lng(loc.1)),
+        }
+    }
+}
 
 impl Default for GraphId {
     fn default() -> Self {
@@ -357,7 +368,13 @@ impl GraphReader {
 
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.
     pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<GraphId> {
-        self.0.tiles_in_bbox(min.0, min.1, max.0, max.1, level)
+        self.0.tiles_in_bbox(
+            min.0 as f32,
+            min.1 as f32,
+            max.0 as f32,
+            max.1 as f32,
+            level,
+        )
     }
 }
 

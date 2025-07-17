@@ -52,7 +52,7 @@ fn main() {
         .unwrap();
 
     // bindings
-    cxx_build::bridges(["src/lib.rs", "src/config.rs"])
+    cxx_build::bridges(["src/lib.rs", "src/config.rs", "src/actor.rs"])
         .file("src/libvalhalla.cpp")
         // Hacky workaraound for linking issue because `get_formatted_date()` function is being called in header file
         // and somehow compiler is unable to resolve it when building bridge library.
@@ -65,10 +65,21 @@ fn main() {
         // Should be defined to have consistent behavior with valhalla tile ref definition
         .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", None)
         .compile("libvalhalla-cxxbridge");
-    println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src/actor.hpp");
+    println!("cargo:rerun-if-changed=src/config.hpp");
     println!("cargo:rerun-if-changed=src/libvalhalla.hpp");
     println!("cargo:rerun-if-changed=src/libvalhalla.cpp");
+    println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=valhalla");
+
+    // protos
+    let proto_files: Vec<_> = fs::read_dir("valhalla/proto")
+        .expect("Failed to read valhalla/proto directory")
+        .map(|entry| entry.expect("Bad fs entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "proto"))
+        .collect();
+    prost_build::compile_protos(&proto_files, &["valhalla/proto/"])
+        .expect("Failed to compile proto files");
 }
 
 /// Recursively copy directory from src to dst, handling special files gracefully

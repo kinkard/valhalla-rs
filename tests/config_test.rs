@@ -16,6 +16,7 @@ struct MjolnirConfig {
     traffic_extract: String,
 }
 
+const ANDORRA_CONFIG: &str = "tests/andorra/config.json";
 const ANDORRA_TILES: &str = "tests/andorra/tiles.tar";
 const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
 
@@ -84,6 +85,10 @@ fn from_file() {
     // Config just ensures that the file is valid JSON. `GraphReader` will check the paths.
     let config = Config::from_file(file.path()).unwrap();
     assert!(GraphReader::new(&config).is_ok());
+
+    // full config
+    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    assert!(GraphReader::new(&config).is_ok());
 }
 
 #[test]
@@ -111,6 +116,11 @@ fn from_json() {
         },
     };
     let config = Config::from_json(&json::to_string(&config)).unwrap();
+    assert!(GraphReader::new(&config).is_ok());
+
+    // full config
+    let json = std::fs::read_to_string(ANDORRA_CONFIG).expect("Failed to read config file");
+    let config = Config::from_json(&json).unwrap();
     assert!(GraphReader::new(&config).is_ok());
 }
 

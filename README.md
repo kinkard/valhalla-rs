@@ -4,9 +4,9 @@ C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) to acc
 
 Features:
 
-- [x] Reading Valhalla tiles and accessing information from road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`). *Not all getters are accessible from Rust*
+- [x] Reading Valhalla tiles and accessing information from road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`). _Not all getters are accessible from Rust_
 - [ ] Writing live traffic information directly to memory-mapped traffic.tar
-- [ ] Actor API (similar to [what is accessible from Python](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb)) for Valhalla's routing engine, allowing route building and other routing operations from Rust
+- [x] Actor API (similar to [what is accessible from Python](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb)) for Valhalla's routing engine, allowing route building and other routing operations from Rust - see [actor_tests](tests/actor_test.rs).
 
 ## Usage
 
