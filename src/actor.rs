@@ -38,6 +38,8 @@ mod ffi {
         fn expansion(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn centroid(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn status(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
+
+        fn parse_api(json: &str, action: i32) -> Result<UniquePtr<CxxString>>;
     }
 }
 
@@ -191,5 +193,16 @@ impl Actor {
         }
 
         result
+    }
+
+    /// Helper function to convert a Valhalla JSON string to a Valhalla API request.
+    pub fn parse_api(json: &str, action: proto::options::Action) -> Result<proto::Api> {
+        if json.is_empty() {
+            // Empty string is a special case downstream, so we can return an error here.
+            return Err(anyhow::anyhow!("Failed to parse json request"));
+        }
+
+        let cxx_string = ffi::parse_api(json, action as i32)?;
+        Ok(proto::Api::decode(cxx_string.as_bytes())?)
     }
 }

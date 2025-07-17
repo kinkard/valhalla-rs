@@ -4,8 +4,8 @@ use valhalla::{
 };
 
 const ANDORRA_CONFIG: &str = "tests/andorra/config.json";
-const ANDORRA_TEST_LOC_1: LatLon = LatLon(42.50107335756198, 1.5103419678605514); // Sant Julia de Loria
-const ANDORRA_TEST_LOC_2: LatLon = LatLon(42.506270893237364, 1.521734167223563); // Andorra la Vella
+const ANDORRA_TEST_LOC_1: LatLon = LatLon(42.50107335756198, 1.510341967860551); // Sant Julia de Loria
+const ANDORRA_TEST_LOC_2: LatLon = LatLon(42.50627089323736, 1.521734167223563); // Andorra la Vella
 
 #[test]
 fn smoke() {
@@ -255,4 +255,54 @@ fn request_response_format() {
             assert_eq!(check(&response), Ok(()), "{:?} for {format:?}", test.name);
         }
     }
+}
+
+#[test]
+fn parse_api() {
+    assert!(Actor::parse_api("", proto::options::Action::Route).is_err());
+    assert!(Actor::parse_api("{", proto::options::Action::Route).is_err());
+    assert!(Actor::parse_api("}", proto::options::Action::Route).is_err());
+
+    let json = r#"{"units":"kilometers","date_time":{"type":"current"},"costing":"auto","costing_options":{"auto":{"use_ferry":0.5,"use_rail_ferry":0.5,"use_highways":0.5,"use_tolls":0.5,"country_crossing_cost":0}},"alternates":2,"locations":[{"lat":42.50107335756198,"lon":1.510341967860551},{"lat":42.50627089323736,"lon":1.521734167223563}]}"#;
+    let api = Actor::parse_api(json, proto::options::Action::Route).expect("Failed to parse API");
+    let options = api.options.as_ref().expect("Options should be present");
+    assert_eq!(options.units, proto::options::Units::Kilometers as i32);
+    // assert_eq!(options.date_time.as_ref().unwrap().type_, proto::options::DateTimeType::Current as i32);
+    assert_eq!(options.costing_type, proto::costing::Type::Auto as i32);
+    assert_eq!(options.locations.len(), 2);
+    assert_eq!(options.locations[0].ll, Some(ANDORRA_TEST_LOC_1.into()));
+    assert_eq!(options.locations[1].ll, Some(ANDORRA_TEST_LOC_2.into()));
+    assert_eq!(
+        options.has_alternates,
+        Some(proto::options::HasAlternates::Alternates(2))
+    );
+
+    let auto_costings = match options
+        .costings
+        .get(&(proto::costing::Type::Auto as i32))
+        .and_then(|costing| costing.has_options.as_ref())
+    {
+        Some(proto::costing::HasOptions::Options(auto_costings)) => auto_costings,
+        _ => panic!("Expected auto costing options to be present"),
+    };
+    assert_eq!(
+        auto_costings.has_use_ferry,
+        Some(proto::costing::options::HasUseFerry::UseFerry(0.5))
+    );
+    assert_eq!(
+        auto_costings.has_use_rail_ferry,
+        Some(proto::costing::options::HasUseRailFerry::UseRailFerry(0.5))
+    );
+    assert_eq!(
+        auto_costings.has_use_highways,
+        Some(proto::costing::options::HasUseHighways::UseHighways(0.5))
+    );
+    assert_eq!(
+        auto_costings.has_use_tolls,
+        Some(proto::costing::options::HasUseTolls::UseTolls(0.5))
+    );
+    assert_eq!(
+        auto_costings.has_country_crossing_cost,
+        Some(proto::costing::options::HasCountryCrossingCost::CountryCrossingCost(0.0))
+    );
 }

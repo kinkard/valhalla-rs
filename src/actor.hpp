@@ -74,7 +74,7 @@ struct Actor final {
     valhalla::Api api = parse_api(request, valhalla::Options::locate);
 
     output_buffer = loki_worker.locate(api);
-    return to_response(output_buffer, valhalla::Options_Format_json); // `locate` always returns JSON
+    return to_response(output_buffer, valhalla::Options_Format_json);  // `locate` always returns JSON
   }
 
   Response matrix(rust::Slice<const uint8_t> request) {
@@ -128,11 +128,11 @@ struct Actor final {
     valhalla::Api api = parse_api(request, valhalla::Options::transit_available);
 
     output_buffer = loki_worker.transit_available(api);
-    return to_response(output_buffer, valhalla::Options_Format_json); // `transit_available` always returns JSON
+    return to_response(output_buffer, valhalla::Options_Format_json);  // `transit_available` always returns JSON
   }
 
   Response expansion(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::no_action); // todo: by all logic this should be `expansion`
+    valhalla::Api api = parse_api(request, valhalla::Options::no_action);  // todo: it should be `expansion`
     const auto format = api.options().format();
 
     switch (api.options().expansion_action()) {
@@ -187,4 +187,10 @@ private:
 
 std::unique_ptr<Actor> new_actor(const boost::property_tree::ptree& config) {
   return std::make_unique<Actor>(config);
+}
+
+std::unique_ptr<std::string> parse_api(rust::Str json, int action) {
+  valhalla::Api api;
+  valhalla::ParseApi(static_cast<std::string>(json), static_cast<valhalla::Options::Action>(action), api);
+  return std::make_unique<std::string>(api.SerializeAsString());
 }
