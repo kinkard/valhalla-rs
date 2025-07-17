@@ -5,10 +5,6 @@
 
 #include "cxx.h"
 
-#include <cstdint>
-#include <memory>
-#include <unordered_map>
-
 namespace valhalla::midgard {
 struct tar;
 }
@@ -41,6 +37,7 @@ struct TileSet {
   rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
                                                     GraphLevel level) const;
   valhalla::baldr::graph_tile_ptr get_tile(valhalla::baldr::GraphId id) const;
+  uint64_t dataset_id() const;
 };
 
 /// Creates a new [`TileSet`] instance based on a Valhalla's config.

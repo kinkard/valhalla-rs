@@ -89,6 +89,14 @@ baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
   return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tar_, tile_it->second), std::move(traffic));
 }
 
+uint64_t TileSet::dataset_id() const {
+  if (auto it = tiles_.begin(); it != tiles_.end()) {
+    return get_tile(baldr::GraphId(it->first))->header()->dataset_id();
+  } else {
+    return 0;
+  }
+}
+
 DirectedEdgeSlice directededges(const GraphTile& tile) {
   const uint32_t count = tile.header()->directededgecount();
   return DirectedEdgeSlice{

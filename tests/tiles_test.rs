@@ -19,6 +19,20 @@ const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
 const ANDORRA_BBOX: (LatLon, LatLon) = (LatLon(42.373627, 1.301427), LatLon(42.72199, 1.892865));
 
 #[test]
+fn dataset_id() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+
+    assert_eq!(reader.dataset_id(), 12953172102);
+}
+
+#[test]
 fn tile_can_outlive_reader() {
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {

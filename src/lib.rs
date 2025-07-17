@@ -183,6 +183,7 @@ mod ffi {
             level: GraphLevel,
         ) -> Vec<GraphId>;
         fn get_tile(self: &TileSet, id: GraphId) -> SharedPtr<GraphTile>;
+        fn dataset_id(self: &TileSet) -> u64;
 
         type GraphTile;
         fn id(self: &GraphTile) -> GraphId;
@@ -359,6 +360,11 @@ impl GraphReader {
     /// Graph tile object at given GraphId if it exists in the tileset.
     pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
         GraphTile::new(self.0.get_tile(id))
+    }
+
+    /// Latest OSM changeset ID (or the maximum OSM Node/Way/Relation ID) in the OSM PBF file used to build the tileset.
+    pub fn dataset_id(&self) -> u64 {
+        self.0.dataset_id()
     }
 
     /// List all tiles in the tileset.
