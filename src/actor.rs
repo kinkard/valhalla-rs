@@ -183,7 +183,7 @@ impl Actor {
         };
 
         // `ffi::Response::data` holds a slice to the internal buffer from which we create `Response`.
-        // Once we are done with the response, we can safely call cleanup to release any internal resources.
+        // Once we are done with the response, we should clean up that buffer and clean inner state.
         self.inner.as_mut().unwrap().cleanup();
 
         // Single huge request can lead to excessive memory usage, let's keep it manageable.
@@ -195,9 +195,11 @@ impl Actor {
     }
 
     /// Helper function to convert a Valhalla JSON string to a Valhalla API request.
+    /// This function is not optimized for performance and should be considered a convenience method.
+    /// For best performance use [`proto::Api`] directly.
     pub fn parse_api(json: &str, action: proto::options::Action) -> Result<proto::Api> {
         if json.is_empty() {
-            // Empty string is a special case downstream, so we can return an error here.
+            // Empty string is a special for Valhalla, so we should return an error here.
             return Err(anyhow::anyhow!("Failed to parse json request"));
         }
 

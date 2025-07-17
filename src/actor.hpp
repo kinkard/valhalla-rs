@@ -38,6 +38,9 @@ struct Actor final {
         thor_worker(config, reader),
         odin_worker(config) {}
 
+  /// Resets inner workers state and clears the output buffer.
+  /// This function should be called after each action call to ensure that next
+  /// action does not accidentally start where the previous one left off.
   void cleanup() {
     output_buffer = std::string();
     loki_worker.cleanup();
