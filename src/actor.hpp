@@ -20,27 +20,12 @@ struct Actor final {
   valhalla::thor::thor_worker_t thor_worker;
   valhalla::odin::odin_worker_t odin_worker;
 
-  // Output buffer for binary data that may contain non-UTF8 characters as Valhalla sup.
-  // Every method in `Actor` returns a slice of bytes to this buffer.
-  // This
+  // Output buffer for binary data, to which every method in `Actor` returns a slice of bytes.
+  //
   // Rust's string can not hold non-UTF8 characters, so to allow Rust code conditionally transform output either into
   // UTF-8 string (if json output was requested) or decode `Api` object (if pbf output was requested) or store it as
   // raw bytes, `Actor` holds `output_buffer` and returns slice of bytes to it. This approach eliminates redundant
-  // intermediate allocations and more importantly, keeps allocations for Rust and C++ types in their worlds.
-  // Safety: Rust borrowing rules prevent keeping a slice to `output_buffer` over any mutation of `Actor` object.
-  //
-  //
-  //   // Output buffer for binary data that may contain non-UTF8 characters.
-  //
-  // This design allows Rust code to handle different output formats flexibly:
-  // - Convert to UTF-8 string for JSON responses
-  // - Decode as `Api` object for Protocol Buffer responses
-  // - Store as raw bytes for other formats
-  //
-  // Benefits:
-  // - Eliminates redundant intermediate allocations
-  // - Keeps memory management separate between Rust and C++ domains
-  //
+  // intermediate allocations and more importantly, keeps memory management separate between Rust and C++ domains.
   // Safety: Rust's borrowing rules ensure that slices to `output_buffer`
   // cannot be held across mutations of the `Actor` object.
   std::string output_buffer;
