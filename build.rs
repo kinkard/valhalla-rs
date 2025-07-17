@@ -37,6 +37,8 @@ fn main() {
         .define("ENABLE_GDAL", "OFF")
         // Switch `graph_tile_ptr` to `std::shared_ptr` that together with cxx `SharedPtr` allows to use `GraphTile` in Rust
         .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", "ON")
+        .define("LOGGING_LEVEL", "WARN") // todo: Provide an API for setting custom loggers to Valhalla
+        .define("ENABLE_SINGLE_FILES_WERROR", "OFF") // with `WARN` log level there are many unused variables
         .build_target("valhalla")
         .build();
 

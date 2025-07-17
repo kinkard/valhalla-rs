@@ -176,7 +176,6 @@ impl Actor {
         self.buffer.clear();
         self.buffer.reserve(request.encoded_len());
         request.encode_raw(&mut self.buffer);
-        println!("Request size is {}", self.buffer.len());
 
         let result = match endpoint(self.inner.as_mut().unwrap(), &self.buffer) {
             Ok(response) => Ok(Response::from(response)),
