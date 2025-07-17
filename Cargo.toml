@@ -22,6 +22,7 @@ exclude = [
     "**/doc/*",
     "**/docs/*",
     "**/bench/*",
+    "**/benches/*",
     "**/benchmarks/*",
     "**/example/*",
     "**/examples/*",
@@ -58,3 +59,8 @@ prost-build = "0.14"
 miniserde = "0.1"
 pretty_assertions = "1"
 tempfile = "3.20"
+criterion = { version = "0.6", default-features = false }
+
+[[bench]]
+name = "actor_bench"
+harness = false
