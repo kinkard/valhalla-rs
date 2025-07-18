@@ -6,7 +6,7 @@ fn main() {
     let build_type = if matches!(std::env::var("PROFILE"), Ok(profile) if profile == "debug") {
         "Debug"
     } else {
-        "Release"
+        "RelWithDebInfo"
     };
 
     // Copy valhalla source to OUT_DIR to avoid modifying the original source that is happening in
@@ -99,7 +99,10 @@ fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()>
         let file_type = entry.file_type()?;
 
         if file_type.is_dir() {
-            copy_dir(&src_path, &dst_path)?;
+            // Valhalla is added as git submodule and contains own submodules as well
+            if entry.file_name() != ".git" {
+                copy_dir(&src_path, &dst_path)?;
+            }
         } else if file_type.is_file() {
             fs::copy(&src_path, &dst_path)?;
         } else if file_type.is_symlink() {
