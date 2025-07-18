@@ -1,7 +1,7 @@
 [package]
 name = "valhalla"
 
-version = "0.5.4"
+version = "0.5.5"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust bindings for Valhalla routing engine"
@@ -41,6 +41,10 @@ exclude = [
     "valhalla/third_party/tz/*.html",
     "valhalla/third_party/unordered_dense/data",
 ]
+
+# Makes possible to run profilers with `cargo bench`, e.g. `samply record cargo bench`
+[profile.bench]
+debug = "line-tables-only"
 
 [dependencies]
 anyhow = "1.0"

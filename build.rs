@@ -3,10 +3,10 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
-    let build_type = if matches!(std::env::var("PROFILE"), Ok(profile) if profile == "debug") {
-        "Debug"
-    } else {
-        "RelWithDebInfo"
+    let build_type = match std::env::var("PROFILE") {
+        Ok(profile) if profile == "debug" => "Debug",
+        Ok(profile) if profile == "bench" => "RelWithDebInfo",
+        _ => "Release",
     };
 
     // Copy valhalla source to OUT_DIR to avoid modifying the original source that is happening in
