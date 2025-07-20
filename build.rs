@@ -3,9 +3,12 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
-    let build_type = match std::env::var("PROFILE") {
-        Ok(profile) if profile == "debug" => "Debug",
-        Ok(profile) if profile == "bench" => "RelWithDebInfo",
+    let build_type = match (
+        std::env::var("PROFILE").as_deref(),
+        std::env::var("DEBUG").as_deref(),
+    ) {
+        (Ok("debug"), _) => "Debug",
+        (Ok("release"), Ok("true")) => "RelWithDebInfo",
         _ => "Release",
     };
 
