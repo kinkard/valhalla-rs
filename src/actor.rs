@@ -11,9 +11,9 @@ pub mod proto {
 #[cxx::bridge]
 mod ffi {
     /// Helper struct to provide an access to C++'s buffer with serialized response data.
-    struct Response<'a> {
+    struct Response {
         /// Raw response data, either a JSON string or binary data.
-        data: &'a [u8],
+        data: UniquePtr<CxxString>,
         /// [`options::Format`] format of the response.
         format: i32,
     }
@@ -26,7 +26,6 @@ mod ffi {
 
         type Actor;
         fn new_actor(config: &ptree) -> Result<UniquePtr<Actor>>;
-        fn cleanup(self: Pin<&mut Actor>);
         fn route(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn locate(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn matrix(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
@@ -85,16 +84,16 @@ pub enum Response {
     Other(Vec<u8>),
 }
 
-impl From<ffi::Response<'_>> for Response {
+impl From<ffi::Response> for Response {
     fn from(response: ffi::Response) -> Self {
         if response.format == Format::Pbf as i32 {
-            let api = proto::Api::decode(response.data)
+            let api = proto::Api::decode(response.data.as_bytes())
                 .expect("Proper PBF data is guaranteed by Valhalla");
             Response::Pbf(Box::new(api))
         } else if response.format == Format::Json as i32 || response.format == Format::Osrm as i32 {
-            Response::Json(String::from_utf8_lossy(response.data).into_owned())
+            Response::Json(String::from_utf8_lossy(response.data.as_bytes()).into_owned())
         } else {
-            Response::Other(response.data.to_owned())
+            Response::Other(response.data.as_bytes().to_owned())
         }
     }
 }
@@ -171,7 +170,7 @@ impl Actor {
         F: for<'a> FnOnce(
             std::pin::Pin<&'a mut ffi::Actor>,
             &'a [u8],
-        ) -> Result<ffi::Response<'a>, cxx::Exception>,
+        ) -> Result<ffi::Response, cxx::Exception>,
     {
         self.buffer.clear();
         self.buffer.reserve(request.encoded_len());
@@ -181,10 +180,6 @@ impl Actor {
             Ok(response) => Ok(Response::from(response)),
             Err(err) => Err(anyhow::Error::from(err)),
         };
-
-        // `ffi::Response::data` holds a slice to the internal buffer from which we create `Response`.
-        // Once we are done with the response, we should clean up that buffer and clean inner state.
-        self.inner.as_mut().unwrap().cleanup();
 
         // Single huge request can lead to excessive memory usage, let's keep it manageable.
         if self.buffer.capacity() > Self::INPUT_BUFFER_SIZE {

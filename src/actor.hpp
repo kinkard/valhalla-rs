@@ -20,16 +20,6 @@ struct Actor final {
   valhalla::thor::thor_worker_t thor_worker;
   valhalla::odin::odin_worker_t odin_worker;
 
-  // Output buffer for binary data, to which every method in `Actor` returns a slice of bytes.
-  //
-  // Rust's string can not hold non-UTF8 characters, so to allow Rust code conditionally transform output either into
-  // UTF-8 string (if json output was requested) or decode `Api` object (if pbf output was requested) or store it as
-  // raw bytes, `Actor` holds `output_buffer` and returns slice of bytes to it. This approach eliminates redundant
-  // intermediate allocations and more importantly, keeps memory management separate between Rust and C++ domains.
-  // Safety: Rust's borrowing rules ensure that slices to `output_buffer`
-  // cannot be held across mutations of the `Actor` object.
-  std::string output_buffer;
-
   Actor() : reader{}, loki_worker({}, reader), thor_worker({}, reader), odin_worker({}) {}
 
   Actor(const boost::property_tree::ptree& config)
@@ -38,123 +28,91 @@ struct Actor final {
         thor_worker(config, reader),
         odin_worker(config) {}
 
-  /// Resets inner workers state and clears the output buffer.
-  /// This function should be called after each action call to ensure that next
-  /// action does not accidentally start where the previous one left off.
-  void cleanup() {
-    output_buffer = std::string();
-    loki_worker.cleanup();
-    thor_worker.cleanup();
-    odin_worker.cleanup();
-  }
-
   Response route(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::route);
-    const auto format = api.options().format();
-
-    loki_worker.route(api);
-    thor_worker.route(api);
-    output_buffer = odin_worker.narrate(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::route, [this](valhalla::Api& api) {
+      loki_worker.route(api);
+      thor_worker.route(api);
+      return odin_worker.narrate(api);
+    });
   }
 
   Response locate(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::locate);
-
-    output_buffer = loki_worker.locate(api);
-    return to_response(output_buffer, valhalla::Options_Format_json);  // `locate` always returns JSON
+    return act(request, valhalla::Options::locate, [this](valhalla::Api& api) { return loki_worker.locate(api); });
   }
 
   Response matrix(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::sources_to_targets);
-    const auto format = api.options().format();
-
-    loki_worker.matrix(api);
-    output_buffer = thor_worker.matrix(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::sources_to_targets, [this](valhalla::Api& api) {
+      loki_worker.matrix(api);
+      return thor_worker.matrix(api);
+    });
   }
 
   Response optimized_route(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::optimized_route);
-    const auto format = api.options().format();
-
-    loki_worker.matrix(api);
-    thor_worker.optimized_route(api);
-    output_buffer = odin_worker.narrate(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::optimized_route, [this](valhalla::Api& api) {
+      loki_worker.matrix(api);
+      thor_worker.optimized_route(api);
+      return odin_worker.narrate(api);
+    });
   }
 
   Response isochrone(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::isochrone);
-    const auto format = api.options().format();
-
-    loki_worker.isochrones(api);
-    output_buffer = thor_worker.isochrones(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::isochrone, [this](valhalla::Api& api) {
+      loki_worker.isochrones(api);
+      return thor_worker.isochrones(api);
+    });
   }
 
   Response trace_route(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::trace_route);
-    const auto format = api.options().format();
-
-    loki_worker.trace(api);
-    thor_worker.trace_route(api);
-    output_buffer = odin_worker.narrate(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::trace_route, [this](valhalla::Api& api) {
+      loki_worker.trace(api);
+      thor_worker.trace_route(api);
+      return odin_worker.narrate(api);
+    });
   }
 
   Response trace_attributes(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::trace_attributes);
-    const auto format = api.options().format();
-
-    loki_worker.trace(api);
-    output_buffer = thor_worker.trace_attributes(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::trace_attributes, [this](valhalla::Api& api) {
+      loki_worker.trace(api);
+      return thor_worker.trace_attributes(api);
+    });
   }
 
   Response transit_available(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::transit_available);
-
-    output_buffer = loki_worker.transit_available(api);
-    return to_response(output_buffer, valhalla::Options_Format_json);  // `transit_available` always returns JSON
+    return act(request, valhalla::Options::transit_available,
+               [this](valhalla::Api& api) { return loki_worker.transit_available(api); });
   }
 
   Response expansion(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::no_action);  // todo: it should be `expansion`
-    const auto format = api.options().format();
-
-    switch (api.options().expansion_action()) {
-    case valhalla::Options::route: loki_worker.route(api); break;
-    case valhalla::Options::isochrone: loki_worker.isochrones(api); break;
-    default: loki_worker.matrix(api); break;
-    }
-    output_buffer = thor_worker.expansion(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::expansion, [this](valhalla::Api& api) {
+      switch (api.options().expansion_action()) {
+      case valhalla::Options::route: loki_worker.route(api); break;
+      case valhalla::Options::isochrone: loki_worker.isochrones(api); break;
+      default: loki_worker.matrix(api); break;
+      }
+      return thor_worker.expansion(api);
+    });
   }
 
   Response centroid(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::centroid);
-    const auto format = api.options().format();
-
-    loki_worker.route(api);
-    thor_worker.centroid(api);
-    output_buffer = odin_worker.narrate(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::centroid, [this](valhalla::Api& api) {
+      loki_worker.route(api);
+      thor_worker.centroid(api);
+      return odin_worker.narrate(api);
+    });
   }
 
   Response status(rust::Slice<const uint8_t> request) {
-    valhalla::Api api = parse_api(request, valhalla::Options::status);
-    const auto format = api.options().format();
-
-    loki_worker.status(api);
-    thor_worker.status(api);
-    odin_worker.status(api);
-    output_buffer = valhalla::tyr::serializeStatus(api);
-    return to_response(output_buffer, format);
+    return act(request, valhalla::Options::status, [this](valhalla::Api& api) {
+      loki_worker.status(api);
+      thor_worker.status(api);
+      odin_worker.status(api);
+      return valhalla::tyr::serializeStatus(api);
+    });
   }
 
 private:
-  static valhalla::Api parse_api(rust::Slice<const uint8_t> request, valhalla::Options::Action action) {
+  template <typename Fn>
+  Response act(rust::Slice<const uint8_t> request, valhalla::Options::Action action, Fn&& action_fn) {
     valhalla::Api api;
     if (!api.ParseFromArray(request.data(), request.size())) {
       throw std::runtime_error("Failed to parse API request");
@@ -162,15 +120,38 @@ private:
 
     // This function sets many defaults in the API object and validates the request.
     valhalla::ParseApi("", action, api);
-    return api;
-  }
+    const auto format = api.options().format();
 
-  static Response to_response(const std::string& str, valhalla::Options::Format format) {
+    /// It's important to call `cleanup` after each action call to ensure that next
+    /// action does not accidentally start where the previous one left off.
+    struct CleanupGuard {
+      Actor& actor_;
+      explicit CleanupGuard(Actor& actor) : actor_(actor) {}
+      ~CleanupGuard() {
+        actor_.loki_worker.cleanup();
+        actor_.thor_worker.cleanup();
+        actor_.odin_worker.cleanup();
+      }
+    } guard(*this);
+
+    std::string output = action_fn(api);
+
     return Response{
-      .data = rust::Slice<const uint8_t>(reinterpret_cast<const uint8_t*>(str.data()), str.size()),
+      .data = std::make_unique<std::string>(std::move(output)),
       .format = format,
     };
   }
+
+  struct WorkerCleanupGuard {
+    Actor& actor_;
+
+    explicit WorkerCleanupGuard(Actor& actor) : actor_(actor) {}
+    ~WorkerCleanupGuard() {
+      actor_.loki_worker.cleanup();
+      actor_.thor_worker.cleanup();
+      actor_.odin_worker.cleanup();
+    }
+  };
 };
 
 std::unique_ptr<Actor> new_actor(const boost::property_tree::ptree& config) {

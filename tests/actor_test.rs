@@ -17,10 +17,19 @@ fn smoke() {
 #[test]
 fn request_response_format() {
     type CheckFn = fn(&anyhow::Result<Response>) -> Result<(), String>;
-    let expect_json = |response: &anyhow::Result<Response>| match response {
-        Ok(Response::Json(str)) if str.starts_with('{') && str.ends_with('}') => Ok(()),
-        Ok(Response::Json(str)) if str.starts_with("[{") && str.ends_with("}]") => Ok(()),
-        _ => Err(format!("Expected JSON response, got: {response:?}")),
+    fn expect_json(response: &anyhow::Result<Response>) -> Result<(), String> {
+        match response {
+            Ok(Response::Json(str)) if str.starts_with('{') && str.ends_with('}') => Ok(()),
+            Ok(Response::Json(str)) if str.starts_with("[{") && str.ends_with("}]") => Ok(()),
+            _ => Err(format!("Expected JSON response, got: {response:?}")),
+        }
+    }
+    let expect_json_warn = |response: &anyhow::Result<Response>| {
+        expect_json(response).and_then(|_| match response {
+            Ok(Response::Json(str)) if str.contains("warnings") => Ok(()),
+            Ok(Response::Json(_)) => Err("Expected JSON with warnings".to_string()),
+            _ => Err("Expected JSON response".to_string()),
+        })
     };
     let expect_pbf = |response: &anyhow::Result<Response>| match response {
         Ok(Response::Pbf(_)) => Ok(()),
@@ -29,10 +38,6 @@ fn request_response_format() {
     let expect_other = |response: &anyhow::Result<Response>| match response {
         Ok(Response::Other(_)) => Ok(()),
         _ => Err(format!("Expected binary response, got: {response:?}")),
-    };
-    let expect_err = |response: &anyhow::Result<Response>| match response {
-        Err(_) => Ok(()),
-        _ => Err(format!("Expected error response, got: {response:?}")),
     };
 
     struct EndpointTest {
@@ -67,7 +72,7 @@ fn request_response_format() {
                 (Format::Osrm, expect_json),
                 (Format::Pbf, expect_pbf),
                 (Format::Gpx, expect_other),
-                (Format::Geotiff, expect_err), // Geotiff requires GDAL
+                (Format::Geotiff, expect_json_warn),
             ],
         },
         EndpointTest {
@@ -81,13 +86,13 @@ fn request_response_format() {
                 has_verbose: Some(proto::options::HasVerbose::Verbose(true)), // for more detailed output
                 ..Default::default()
             },
-            // `locate` always returns JSON
             format_checks: vec![
                 (Format::Json, expect_json),
                 (Format::Osrm, expect_json),
+                // `locate` always returns JSON and doesn't support warnings
                 (Format::Pbf, expect_json),
                 (Format::Gpx, expect_json),
-                (Format::Geotiff, expect_err), // todo: Valhalla handles it differently, to be fixed
+                (Format::Geotiff, expect_json),
             ],
         },
         EndpointTest {
@@ -103,8 +108,8 @@ fn request_response_format() {
                 (Format::Json, expect_json),
                 (Format::Osrm, expect_json),
                 (Format::Pbf, expect_pbf),
-                // (Format::Gpx, expect_err), // todo: Valhalla causes `std::terminate` on this format
-                (Format::Geotiff, expect_err),
+                (Format::Gpx, expect_json_warn),
+                (Format::Geotiff, expect_json_warn),
             ],
         },
         EndpointTest {
@@ -116,7 +121,7 @@ fn request_response_format() {
                 (Format::Osrm, expect_json),
                 (Format::Pbf, expect_pbf),
                 (Format::Gpx, expect_other),
-                (Format::Geotiff, expect_err), // Geotiff requires GDAL
+                (Format::Geotiff, expect_json_warn),
             ],
         },
         EndpointTest {
@@ -137,10 +142,10 @@ fn request_response_format() {
             },
             format_checks: vec![
                 (Format::Json, expect_json),
-                // (Format::Osrm, expect_json), // todo: Valhalla causes `std::terminate` on this format
+                (Format::Osrm, expect_json),
                 (Format::Pbf, expect_pbf),
-                // (Format::Gpx, expect_other), // todo: Valhalla causes `std::terminate` on this format
-                (Format::Geotiff, expect_err), // Geotiff requires GDAL
+                (Format::Gpx, expect_json_warn),
+                (Format::Geotiff, expect_json_warn), // Geotiff requires GDAL
             ],
         },
         EndpointTest {
@@ -158,7 +163,7 @@ fn request_response_format() {
                 (Format::Osrm, expect_json),
                 (Format::Pbf, expect_pbf),
                 (Format::Gpx, expect_other),
-                (Format::Geotiff, expect_err), // Geotiff requires GDAL
+                (Format::Geotiff, expect_json_warn),
             ],
         },
         EndpointTest {
@@ -175,8 +180,8 @@ fn request_response_format() {
                 (Format::Json, expect_json),
                 (Format::Osrm, expect_json),
                 (Format::Pbf, expect_pbf),
-                (Format::Gpx, expect_other),
-                (Format::Geotiff, expect_err), // Geotiff requires GDAL
+                (Format::Gpx, expect_json_warn),
+                (Format::Geotiff, expect_json_warn),
             ],
         },
         EndpointTest {
@@ -184,12 +189,12 @@ fn request_response_format() {
             endpoint: Actor::transit_available,
             options: base_options.clone(),
             format_checks: vec![
-                //  `transit_available` always returns JSON
                 (Format::Json, expect_json),
                 (Format::Osrm, expect_json),
+                // `transit_available` always returns JSON and none of them has warnings
                 (Format::Pbf, expect_json),
                 (Format::Gpx, expect_json),
-                (Format::Geotiff, expect_err),
+                (Format::Geotiff, expect_json),
             ],
         },
         EndpointTest {
@@ -205,9 +210,10 @@ fn request_response_format() {
             format_checks: vec![
                 (Format::Json, expect_json),
                 (Format::Osrm, expect_json),
-                (Format::Pbf, expect_json), // no PBF support for expansion yet
-                (Format::Gpx, expect_other), // todo: It's actually json in Vec<u8>...
-                (Format::Geotiff, expect_err),
+                (Format::Pbf, expect_pbf),
+                // no warnings for GPX and Geotiff, while they are not supported
+                (Format::Gpx, expect_json),
+                (Format::Geotiff, expect_json),
             ],
         },
         EndpointTest {
@@ -216,10 +222,10 @@ fn request_response_format() {
             options: base_options.clone(),
             format_checks: vec![
                 (Format::Json, expect_json),
-                (Format::Osrm, expect_err), // no OSRM format support for centroid
+                (Format::Osrm, expect_json_warn),
                 (Format::Pbf, expect_pbf),
-                (Format::Gpx, expect_other), // todo: It's actually json in Vec<u8>...
-                (Format::Geotiff, expect_err),
+                (Format::Gpx, expect_json_warn),
+                (Format::Geotiff, expect_json_warn),
             ],
         },
         EndpointTest {
@@ -233,8 +239,9 @@ fn request_response_format() {
                 (Format::Json, expect_json),
                 (Format::Osrm, expect_json),
                 (Format::Pbf, expect_pbf),
-                (Format::Gpx, expect_other), // todo: It's actually json in Vec<u8>...
-                (Format::Geotiff, expect_err),
+                // no warnings for GPX and Geotiff, while they are not supported
+                (Format::Gpx, expect_json),
+                (Format::Geotiff, expect_json),
             ],
         },
     ];
