@@ -113,14 +113,15 @@ struct Actor final {
 private:
   template <typename Fn>
   Response act(rust::Slice<const uint8_t> request, valhalla::Options::Action action, Fn&& action_fn) {
-    valhalla::Api api;
-    if (!api.ParseFromArray(request.data(), request.size())) {
+    google::protobuf::Arena arena;
+    auto* api = google::protobuf::Arena::Create<valhalla::Api>(&arena);
+    if (!api->ParseFromArray(request.data(), request.size())) {
       throw std::runtime_error("Failed to parse API request");
     }
 
     // This function sets many defaults in the API object and validates the request.
-    valhalla::ParseApi("", action, api);
-    const auto format = api.options().format();
+    valhalla::ParseApi("", action, *api);
+    const auto format = api->options().format();
 
     /// It's important to call `cleanup` after each action call to ensure that next
     /// action does not accidentally start where the previous one left off.
@@ -134,7 +135,7 @@ private:
       }
     } guard(*this);
 
-    std::string output = action_fn(api);
+    std::string output = action_fn(*api);
 
     return Response{
       .data = std::make_unique<std::string>(std::move(output)),

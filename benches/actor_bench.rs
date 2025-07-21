@@ -10,9 +10,10 @@ fn route(c: &mut Criterion) {
     let config = Config::from_file(ANDORRA_CONFIG).unwrap();
     let mut actor = Actor::new(&config).unwrap();
 
-    c.bench_function("short route", |b| {
+    c.bench_function("short route json", |b| {
         let request = proto::Api {
             options: Some(proto::Options {
+                format: proto::options::Format::Json as i32,
                 costing_type: proto::costing::Type::Auto as i32,
                 locations: vec![
                     proto::Location {
@@ -35,9 +36,62 @@ fn route(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("long route", |b| {
+    c.bench_function("short route pbf", |b| {
         let request = proto::Api {
             options: Some(proto::Options {
+                format: proto::options::Format::Pbf as i32,
+                costing_type: proto::costing::Type::Auto as i32,
+                locations: vec![
+                    proto::Location {
+                        ll: Some(ANDORRA_TEST_LOC_1.into()),
+                        ..Default::default()
+                    },
+                    proto::Location {
+                        ll: Some(ANDORRA_TEST_LOC_2.into()),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        b.iter(|| {
+            let response = actor.route(black_box(&request)).unwrap();
+            black_box(response)
+        });
+    });
+
+    c.bench_function("long route json", |b| {
+        let request = proto::Api {
+            options: Some(proto::Options {
+                format: proto::options::Format::Json as i32,
+                costing_type: proto::costing::Type::Auto as i32,
+                locations: vec![
+                    proto::Location {
+                        ll: Some(LatLon(42.54381401912126, 1.4756460643803673).into()),
+                        ..Default::default()
+                    },
+                    proto::Location {
+                        ll: Some(LatLon(42.54262715333714, 1.7332292461658099).into()),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        b.iter(|| {
+            let response = actor.route(black_box(&request)).unwrap();
+            black_box(response)
+        });
+    });
+
+    c.bench_function("long route pbf", |b| {
+        let request = proto::Api {
+            options: Some(proto::Options {
+                format: proto::options::Format::Pbf as i32,
                 costing_type: proto::costing::Type::Auto as i32,
                 locations: vec![
                     proto::Location {
