@@ -3,7 +3,7 @@ use std::{io::Write, path::PathBuf};
 use miniserde::{Serialize, json};
 use tempfile::NamedTempFile;
 
-use valhalla::{Config, GraphReader};
+use valhalla::{Actor, Config, GraphReader};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -85,10 +85,21 @@ fn from_file() {
     // Config just ensures that the file is valid JSON. `GraphReader` will check the paths.
     let config = Config::from_file(file.path()).unwrap();
     assert!(GraphReader::new(&config).is_ok());
+}
 
-    // full config
+#[test]
+fn from_full_config() {
     let config = Config::from_file(ANDORRA_CONFIG).unwrap();
     assert!(GraphReader::new(&config).is_ok());
+    assert!(Actor::new(&config).is_ok());
+
+    // Break the path to the tiles in the config so both GraphReader and Actor fail
+    let config_json = std::fs::read_to_string(ANDORRA_CONFIG)
+        .unwrap()
+        .replace(ANDORRA_TILES, "bad_path_to_tile_extract");
+    let config = Config::from_json(&config_json).unwrap();
+    assert!(GraphReader::new(&config).is_err());
+    assert!(Actor::new(&config).is_err());
 }
 
 #[test]

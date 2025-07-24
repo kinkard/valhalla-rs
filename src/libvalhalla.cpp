@@ -40,7 +40,7 @@ std::shared_ptr<TileSet> new_tileset(const boost::property_tree::ptree& pt) {
 
   auto tile_set = TileSetReader::create(pt.get_child("mjolnir"));
   if (!tile_set.tar_) {
-    throw std::runtime_error("Failed to load tile extract from");
+    throw std::runtime_error("Failed to load tile extract");
   }
   return std::make_shared<TileSet>(std::move(tile_set));
 }

@@ -26,7 +26,11 @@ struct Actor final {
       : reader(std::make_shared<valhalla::baldr::GraphReader>(config.get_child("mjolnir"))),
         loki_worker(config, reader),
         thor_worker(config, reader),
-        odin_worker(config) {}
+        odin_worker(config) {
+          if (reader->GetTileSet().empty()) {
+            throw std::runtime_error("Failed to load tileset");
+          }
+        }
 
   Response route(rust::Slice<const uint8_t> request) {
     return act(request, valhalla::Options::route, [this](valhalla::Api& api) {
