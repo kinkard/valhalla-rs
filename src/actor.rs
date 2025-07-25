@@ -199,6 +199,26 @@ impl Actor {
         }
 
         let cxx_string = ffi::parse_api(json, action as i32)?;
-        Ok(proto::Api::decode(cxx_string.as_bytes())?)
+        let mut api = proto::Api::decode(cxx_string.as_bytes())?;
+
+        // Workaround for "ignore_closures in costing and exclude_closures in search_filter cannot both be specified"
+        // that is happened because this check is happens before that value is set to the default false and processing
+        // json request actually causes parsing function to be called twice because it parses and sets default values.
+        if let Some(options) = &mut api.options {
+            for costing in options.costings.values_mut() {
+                if let Some(proto::costing::HasOptions::Options(costing_options)) =
+                    &mut costing.has_options
+                {
+                    // If ignore_closures is false, we can clear it
+                    if let Some(proto::costing::options::HasIgnoreClosures::IgnoreClosures(false)) =
+                        costing_options.has_ignore_closures
+                    {
+                        costing_options.has_ignore_closures = None;
+                    }
+                }
+            }
+        }
+
+        Ok(api)
     }
 }

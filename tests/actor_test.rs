@@ -312,4 +312,10 @@ fn parse_api() {
         auto_costings.has_country_crossing_cost,
         Some(proto::costing::options::HasCountryCrossingCost::CountryCrossingCost(0.0))
     );
+
+    // Prsed request should be routable
+    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let mut actor = Actor::new(&config).unwrap();
+    let response = actor.route(&api);
+    assert!(response.is_ok(), "Failed to route: {response:?}");
 }
