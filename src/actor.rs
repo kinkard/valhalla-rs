@@ -98,6 +98,9 @@ impl From<ffi::Response> for Response {
     }
 }
 
+/// High-level interface to interact with [Valhalla's API](https://valhalla.github.io/valhalla/api/).
+/// On contrary to the Valhalla REST and C++ APIs, this interface is designed to be used with [`proto::Api`] only,
+/// to avoid unnecessary conversions and to provide a strongly typed interface.
 pub struct Actor {
     inner: cxx::UniquePtr<ffi::Actor>,
     /// Buffer to reuse memory for encoded requests.
