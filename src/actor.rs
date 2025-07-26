@@ -1,6 +1,6 @@
 use prost::Message;
 
-use crate::{Config, ValhallaError, proto::options::Format};
+use crate::{Config, Error, proto::options::Format};
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/valhalla.rs"));
@@ -117,65 +117,59 @@ impl Actor {
     /// };
     /// let actor = valhalla::Actor::new(&config);
     /// ```
-    pub fn new(config: &Config) -> Result<Self, ValhallaError> {
+    pub fn new(config: &Config) -> Result<Self, Error> {
         Ok(Self {
             inner: ffi::new_actor(config.inner())?,
             buffer: Vec::with_capacity(Self::INPUT_BUFFER_SIZE),
         })
     }
 
-    pub fn route(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn route(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::route, request)
     }
 
-    pub fn locate(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn locate(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::locate, request)
     }
 
-    pub fn matrix(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn matrix(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::matrix, request)
     }
 
-    pub fn optimized_route(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn optimized_route(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::optimized_route, request)
     }
 
-    pub fn isochrone(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn isochrone(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::isochrone, request)
     }
 
-    pub fn trace_route(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn trace_route(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::trace_route, request)
     }
 
-    pub fn trace_attributes(
-        &mut self,
-        request: &proto::Options,
-    ) -> Result<Response, ValhallaError> {
+    pub fn trace_attributes(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::trace_attributes, request)
     }
 
-    pub fn transit_available(
-        &mut self,
-        request: &proto::Options,
-    ) -> Result<Response, ValhallaError> {
+    pub fn transit_available(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::transit_available, request)
     }
 
-    pub fn expansion(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn expansion(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::expansion, request)
     }
 
-    pub fn centroid(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn centroid(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::centroid, request)
     }
 
-    pub fn status(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
+    pub fn status(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::status, request)
     }
 
     /// Generic helper function to process request encoding, calling the endpoint and handling cleanup.
-    fn act<F>(&mut self, endpoint: F, request: &proto::Options) -> Result<Response, ValhallaError>
+    fn act<F>(&mut self, endpoint: F, request: &proto::Options) -> Result<Response, Error>
     where
         F: for<'a> FnOnce(
             std::pin::Pin<&'a mut ffi::Actor>,
@@ -202,15 +196,15 @@ impl Actor {
     pub fn parse_json_request(
         json: &str,
         action: proto::options::Action,
-    ) -> Result<proto::Options, ValhallaError> {
+    ) -> Result<proto::Options, Error> {
         if json.is_empty() {
             // Empty string is a special for Valhalla, so we should return an error here.
-            return Err(ValhallaError("Failed to parse json request".into()));
+            return Err(Error("Failed to parse json request".into()));
         }
 
         let cxx_string = ffi::parse_json_request(json, action as i32)?;
         let mut options = proto::Options::decode(cxx_string.as_bytes())
-            .map_err(|err| ValhallaError(err.to_string().into()))?;
+            .map_err(|err| Error(err.to_string().into()))?;
 
         // Workaround for "ignore_closures in costing and exclude_closures in search_filter cannot both be specified"
         // that is happened because this check is happens before that value is set to the default false and processing

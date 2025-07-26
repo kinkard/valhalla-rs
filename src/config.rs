@@ -1,6 +1,6 @@
 use std::{os::unix::ffi::OsStrExt, path::Path};
 
-use crate::ValhallaError;
+use crate::Error;
 
 #[cxx::bridge]
 pub(crate) mod ffi {
@@ -26,7 +26,7 @@ impl Config {
     /// ```rust
     /// let config = valhalla::Config::from_file("path/to/config.json");
     /// ```
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ValhallaError> {
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
         Ok(Config(ffi::from_file(
             path.as_ref().as_os_str().as_bytes(),
         )?))
@@ -37,7 +37,7 @@ impl Config {
     /// let json = r#"{"mjolnir":{"tile_extract":"path/to/tiles.tar","traffic_extract":"path/to/traffic.tar"}}"#;
     /// let config = valhalla::Config::from_json(&json);
     /// ```
-    pub fn from_json(config: &str) -> Result<Self, ValhallaError> {
+    pub fn from_json(config: &str) -> Result<Self, Error> {
         Ok(Config(ffi::from_json(config)?))
     }
 
@@ -45,7 +45,7 @@ impl Config {
     /// ```rust
     /// let config = valhalla::Config::from_tile_extract("path/to/tiles.tar");
     /// ```
-    pub fn from_tile_extract(tile_extract: impl AsRef<Path>) -> Result<Self, ValhallaError> {
+    pub fn from_tile_extract(tile_extract: impl AsRef<Path>) -> Result<Self, Error> {
         let config = format!(
             "{{\"mjolnir\":{{\"tile_extract\":\"{}\"}}}}",
             tile_extract.as_ref().display()

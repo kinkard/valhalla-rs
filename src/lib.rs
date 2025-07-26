@@ -257,21 +257,21 @@ unsafe impl Sync for ffi::TileSet {}
 unsafe impl Send for ffi::GraphTile {}
 unsafe impl Sync for ffi::GraphTile {}
 
-/// Valhalla error type that is used to represent errors returned by the Valhalla C++ API.
+/// Represents errors returned by the Valhalla C++ API.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ValhallaError(Box<str>);
+pub struct Error(Box<str>);
 
-impl fmt::Display for ValhallaError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
 
-impl std::error::Error for ValhallaError {}
+impl std::error::Error for Error {}
 
-impl From<cxx::Exception> for ValhallaError {
+impl From<cxx::Exception> for Error {
     fn from(err: cxx::Exception) -> Self {
-        ValhallaError(err.what().into())
+        Error(err.what().into())
     }
 }
 
@@ -373,7 +373,7 @@ impl GraphReader {
     /// };
     /// let reader = valhalla::GraphReader::new(&config);
     /// ```
-    pub fn new(config: &Config) -> Result<Self, ValhallaError> {
+    pub fn new(config: &Config) -> Result<Self, Error> {
         Ok(Self(ffi::new_tileset(config.inner())?))
     }
 

@@ -1,5 +1,5 @@
 use valhalla::{
-    Actor, Config, LatLon, Response, ValhallaError,
+    Actor, Config, Error, LatLon, Response,
     proto::{self, options::Format},
 };
 
@@ -16,33 +16,33 @@ fn smoke() {
 
 #[test]
 fn request_response_format() {
-    type CheckFn = fn(&Result<Response, ValhallaError>) -> Result<(), String>;
-    fn expect_json(response: &Result<Response, ValhallaError>) -> Result<(), String> {
+    type CheckFn = fn(&Result<Response, Error>) -> Result<(), String>;
+    fn expect_json(response: &Result<Response, Error>) -> Result<(), String> {
         match response {
             Ok(Response::Json(str)) if str.starts_with('{') && str.ends_with('}') => Ok(()),
             Ok(Response::Json(str)) if str.starts_with("[{") && str.ends_with("}]") => Ok(()),
             _ => Err(format!("Expected JSON response, got: {response:?}")),
         }
     }
-    let expect_json_warn = |response: &Result<Response, ValhallaError>| {
+    let expect_json_warn = |response: &Result<Response, Error>| {
         expect_json(response).and_then(|_| match response {
             Ok(Response::Json(str)) if str.contains("warnings") => Ok(()),
             Ok(Response::Json(_)) => Err("Expected JSON with warnings".to_string()),
             _ => Err("Expected JSON response".to_string()),
         })
     };
-    let expect_pbf = |response: &Result<Response, ValhallaError>| match response {
+    let expect_pbf = |response: &Result<Response, Error>| match response {
         Ok(Response::Pbf(_)) => Ok(()),
         _ => Err(format!("Expected PBF response, got: {response:?}")),
     };
-    let expect_other = |response: &Result<Response, ValhallaError>| match response {
+    let expect_other = |response: &Result<Response, Error>| match response {
         Ok(Response::Other(_)) => Ok(()),
         _ => Err(format!("Expected binary response, got: {response:?}")),
     };
 
     struct EndpointTest {
         name: &'static str,
-        endpoint: fn(&mut Actor, &proto::Options) -> Result<Response, ValhallaError>,
+        endpoint: fn(&mut Actor, &proto::Options) -> Result<Response, Error>,
         options: proto::Options,
         format_checks: Vec<(Format, CheckFn)>,
     }
