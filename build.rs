@@ -36,8 +36,7 @@ fn main() {
         .build_target("valhalla")
         .build();
     // Clean up temporary created `valhalla/third_party/tz/leapseconds` to keep source tree clean.
-    std::fs::remove_file("valhalla/third_party/tz/leapseconds")
-        .expect("Failed to remove leapseconds temp file");
+    let _ = fs::remove_file("valhalla/third_party/tz/leapseconds");
 
     let valhalla_includes = extract_includes(&dst.join("build/compile_commands.json"), "config.cc");
 
@@ -92,7 +91,7 @@ fn extract_includes(compile_commands: &Path, cpp_source: &str) -> Vec<String> {
     assert!(compile_commands.exists(), "compile_commands.json not found");
 
     let content =
-        std::fs::read_to_string(compile_commands).expect("Failed to read compile_commands.json");
+        fs::read_to_string(compile_commands).expect("Failed to read compile_commands.json");
     let commands: Vec<CompileCommand> =
         json::from_str(&content).expect("Failed to parse compile_commands.json");
 
