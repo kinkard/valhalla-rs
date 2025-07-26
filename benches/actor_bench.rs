@@ -11,22 +11,19 @@ fn route(c: &mut Criterion) {
     let mut actor = Actor::new(&config).unwrap();
 
     c.bench_function("short route json", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                format: proto::options::Format::Json as i32,
-                costing_type: proto::costing::Type::Auto as i32,
-                locations: vec![
-                    proto::Location {
-                        ll: Some(ANDORRA_TEST_LOC_1.into()),
-                        ..Default::default()
-                    },
-                    proto::Location {
-                        ll: Some(ANDORRA_TEST_LOC_2.into()),
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }),
+        let request = proto::Options {
+            format: proto::options::Format::Json as i32,
+            costing_type: proto::costing::Type::Auto as i32,
+            locations: vec![
+                proto::Location {
+                    ll: Some(ANDORRA_TEST_LOC_1.into()),
+                    ..Default::default()
+                },
+                proto::Location {
+                    ll: Some(ANDORRA_TEST_LOC_2.into()),
+                    ..Default::default()
+                },
+            ],
             ..Default::default()
         };
 
@@ -37,22 +34,19 @@ fn route(c: &mut Criterion) {
     });
 
     c.bench_function("short route pbf", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                format: proto::options::Format::Pbf as i32,
-                costing_type: proto::costing::Type::Auto as i32,
-                locations: vec![
-                    proto::Location {
-                        ll: Some(ANDORRA_TEST_LOC_1.into()),
-                        ..Default::default()
-                    },
-                    proto::Location {
-                        ll: Some(ANDORRA_TEST_LOC_2.into()),
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }),
+        let request = proto::Options {
+            format: proto::options::Format::Pbf as i32,
+            costing_type: proto::costing::Type::Auto as i32,
+            locations: vec![
+                proto::Location {
+                    ll: Some(ANDORRA_TEST_LOC_1.into()),
+                    ..Default::default()
+                },
+                proto::Location {
+                    ll: Some(ANDORRA_TEST_LOC_2.into()),
+                    ..Default::default()
+                },
+            ],
             ..Default::default()
         };
 
@@ -63,22 +57,19 @@ fn route(c: &mut Criterion) {
     });
 
     c.bench_function("long route json", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                format: proto::options::Format::Json as i32,
-                costing_type: proto::costing::Type::Auto as i32,
-                locations: vec![
-                    proto::Location {
-                        ll: Some(LatLon(42.54381401912126, 1.4756460643803673).into()),
-                        ..Default::default()
-                    },
-                    proto::Location {
-                        ll: Some(LatLon(42.54262715333714, 1.7332292461658099).into()),
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }),
+        let request = proto::Options {
+            format: proto::options::Format::Json as i32,
+            costing_type: proto::costing::Type::Auto as i32,
+            locations: vec![
+                proto::Location {
+                    ll: Some(LatLon(42.54381401912126, 1.4756460643803673).into()),
+                    ..Default::default()
+                },
+                proto::Location {
+                    ll: Some(LatLon(42.54262715333714, 1.7332292461658099).into()),
+                    ..Default::default()
+                },
+            ],
             ..Default::default()
         };
 
@@ -89,22 +80,19 @@ fn route(c: &mut Criterion) {
     });
 
     c.bench_function("long route pbf", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                format: proto::options::Format::Pbf as i32,
-                costing_type: proto::costing::Type::Auto as i32,
-                locations: vec![
-                    proto::Location {
-                        ll: Some(LatLon(42.54381401912126, 1.4756460643803673).into()),
-                        ..Default::default()
-                    },
-                    proto::Location {
-                        ll: Some(LatLon(42.54262715333714, 1.7332292461658099).into()),
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }),
+        let request = proto::Options {
+            format: proto::options::Format::Pbf as i32,
+            costing_type: proto::costing::Type::Auto as i32,
+            locations: vec![
+                proto::Location {
+                    ll: Some(LatLon(42.54381401912126, 1.4756460643803673).into()),
+                    ..Default::default()
+                },
+                proto::Location {
+                    ll: Some(LatLon(42.54262715333714, 1.7332292461658099).into()),
+                    ..Default::default()
+                },
+            ],
             ..Default::default()
         };
 
@@ -122,14 +110,11 @@ fn trace_attributes(c: &mut Criterion) {
     let shape = "ifadpAyon{A`ClBtAg@~FwKbOwIeAtL[lJt@hDnCtEdB~D|BnDbAj@v@Sr@s@?sAy@gIkA_ICyDh@{Cz@}At@k@fACbAb@j@~@xAvHvHn`@p@pE\\~@t@`@lAoA\\wCo@aRu@uSOoG`@mBr@oAbBw@dBNxA|Bj@|HbDj\\f@lBt@f@fAIr@uCtBaPbCaSj@eD~A{AjCk@nBrBb@jDyJr`AG~DnBzCbChAb@YbAo@bA}FzGmo@pAuHt@iC~AwBhAq@dBIbH~ApCXrBA`Ba@bBz@MvCeB`CeB`A}@f@yDjD}DlEsAlDE|AXrAr@j@|@OnAqAtBmFzAcC|C_@zEg@l@^P~@S|Bo@hA_B|@wBlAmAd@]fBTjCOlJqAbKx@rGFtCN~FcBjIqDxIwBlD?zBGzCg@Rc@^Yl@Ot@Cd@?f@Df@Jb@P^TZVTZLZD\\?ZGXOTSRYN]J_@Fc@|GwAbCG|DCnA@tDf@xCGvI_CfBu@~@i@ZQ|DyBtIeF|BuAdCoERkACoBUoBcBsDyBoCiB_C}@kBuAcEu@aDQw@]uCKsB@qAPkB^cC~@}EdBgGrUih@vAaDjEaJlMqYrMmY|@uA`AiAnDwDtDiDvBiCX[`BoBtDgFjB_ENg@Bk@x@uIb@wG`@eIJyAzAar@^qQ_AsUkCuRy@aGuE}PyDqLyFaJiDiFyMgRsImN_AuAeBsB}ByAkDy@mFe@oEYqF}AsHcDeB{@aA[g@M{Cy@gA[{Bm@{IyBkGaB{EgBmB{@aB}@mCoBgCoB}HaJmSmV}QmUqD{EeDgG}BsFoB{I}@sF_DaYu@yEs@mEs@qCw@eC_DuHeDaIaAaCwEgKkFgL}JkUwHoOqBuDqBuCcB}B_CyBuFeEmDoBwBqA_G_CsFyA_@IoEy@sEk@_DMuAKmBWy@a@w@y@Qq@E}FFW`@eB|@wAbA{@tAc@rBB`DvB~TpNhKtGlSvM|GhEjPlH`NpF";
 
     c.bench_function("trace attributes json", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                costing_type: proto::costing::Type::Auto as i32,
-                has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
-                    shape.into(),
-                )),
-                ..Default::default()
-            }),
+        let request = proto::Options {
+            costing_type: proto::costing::Type::Auto as i32,
+            has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
+                shape.into(),
+            )),
             ..Default::default()
         };
         b.iter(|| {
@@ -139,15 +124,12 @@ fn trace_attributes(c: &mut Criterion) {
     });
 
     c.bench_function("trace attributes pbf", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                costing_type: proto::costing::Type::Auto as i32,
-                has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
-                    shape.into(),
-                )),
-                format: proto::options::Format::Pbf as i32,
-                ..Default::default()
-            }),
+        let request = proto::Options {
+            costing_type: proto::costing::Type::Auto as i32,
+            has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
+                shape.into(),
+            )),
+            format: proto::options::Format::Pbf as i32,
             ..Default::default()
         };
         b.iter(|| {
@@ -162,14 +144,11 @@ fn locate(c: &mut Criterion) {
     let mut actor = Actor::new(&config).unwrap();
 
     c.bench_function("locate", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                locations: vec![proto::Location {
-                    ll: Some(ANDORRA_TEST_LOC_1.into()),
-                    ..Default::default()
-                }],
+        let request = proto::Options {
+            locations: vec![proto::Location {
+                ll: Some(ANDORRA_TEST_LOC_1.into()),
                 ..Default::default()
-            }),
+            }],
             ..Default::default()
         };
 
@@ -189,7 +168,8 @@ fn locate(c: &mut Criterion) {
         }"#;
         b.iter(|| {
             let request =
-                Actor::parse_api(black_box(request), proto::options::Action::Locate).unwrap();
+                Actor::parse_json_request(black_box(request), proto::options::Action::Locate)
+                    .unwrap();
             let response = actor.locate(&request).unwrap();
             black_box(response)
         });
@@ -201,11 +181,8 @@ fn status(c: &mut Criterion) {
     let mut actor = Actor::new(&config).unwrap();
 
     c.bench_function("status", |b| {
-        let request = proto::Api {
-            options: Some(proto::Options {
-                has_verbose: Some(proto::options::HasVerbose::Verbose(true)),
-                ..Default::default()
-            }),
+        let request = proto::Options {
+            has_verbose: Some(proto::options::HasVerbose::Verbose(true)),
             ..Default::default()
         };
 

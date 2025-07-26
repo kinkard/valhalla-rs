@@ -27,10 +27,10 @@ struct Actor final {
         loki_worker(config, reader),
         thor_worker(config, reader),
         odin_worker(config) {
-          if (reader->GetTileSet().empty()) {
-            throw std::runtime_error("Failed to load tileset");
-          }
-        }
+    if (reader->GetTileSet().empty()) {
+      throw std::runtime_error("Failed to load tileset");
+    }
+  }
 
   Response route(rust::Slice<const uint8_t> request) {
     return act(request, valhalla::Options::route, [this](valhalla::Api& api) {
@@ -115,11 +115,12 @@ struct Actor final {
   }
 
 private:
+  /// `request` is a serialized [`valhalla::Options`] protobuf object.
   template <typename Fn>
   Response act(rust::Slice<const uint8_t> request, valhalla::Options::Action action, Fn&& action_fn) {
     google::protobuf::Arena arena;
     auto* api = google::protobuf::Arena::Create<valhalla::Api>(&arena);
-    if (!api->ParseFromArray(request.data(), request.size())) {
+    if (!api->mutable_options()->ParseFromArray(request.data(), request.size())) {
       throw std::runtime_error("Failed to parse API request");
     }
 
@@ -146,25 +147,14 @@ private:
       .format = format,
     };
   }
-
-  struct WorkerCleanupGuard {
-    Actor& actor_;
-
-    explicit WorkerCleanupGuard(Actor& actor) : actor_(actor) {}
-    ~WorkerCleanupGuard() {
-      actor_.loki_worker.cleanup();
-      actor_.thor_worker.cleanup();
-      actor_.odin_worker.cleanup();
-    }
-  };
 };
 
 std::unique_ptr<Actor> new_actor(const boost::property_tree::ptree& config) {
   return std::make_unique<Actor>(config);
 }
 
-std::unique_ptr<std::string> parse_api(rust::Str json, int action) {
+std::unique_ptr<std::string> parse_json_request(rust::Str json, int action) {
   valhalla::Api api;
   valhalla::ParseApi(static_cast<std::string>(json), static_cast<valhalla::Options::Action>(action), api);
-  return std::make_unique<std::string>(api.SerializeAsString());
+  return std::make_unique<std::string>(api.options().SerializeAsString());
 }

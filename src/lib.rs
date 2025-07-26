@@ -1,6 +1,8 @@
-use std::hash::{Hash, Hasher};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+};
 
-use anyhow::Result;
 use bitflags::bitflags;
 
 mod actor;
@@ -255,6 +257,24 @@ unsafe impl Sync for ffi::TileSet {}
 unsafe impl Send for ffi::GraphTile {}
 unsafe impl Sync for ffi::GraphTile {}
 
+/// Valhalla error type that is used to represent errors returned by the Valhalla C++ API.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ValhallaError(Box<str>);
+
+impl fmt::Display for ValhallaError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for ValhallaError {}
+
+impl From<cxx::Exception> for ValhallaError {
+    fn from(err: cxx::Exception) -> Self {
+        ValhallaError(err.what().into())
+    }
+}
+
 bitflags! {
     /// Access bit field constants. Access in directed edge allows 12 bits.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -353,7 +373,7 @@ impl GraphReader {
     /// };
     /// let reader = valhalla::GraphReader::new(&config);
     /// ```
-    pub fn new(config: &Config) -> Result<Self> {
+    pub fn new(config: &Config) -> Result<Self, ValhallaError> {
         Ok(Self(ffi::new_tileset(config.inner())?))
     }
 

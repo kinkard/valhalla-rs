@@ -1,5 +1,5 @@
 use valhalla::{
-    Actor, Config, LatLon, Response,
+    Actor, Config, LatLon, Response, ValhallaError,
     proto::{self, options::Format},
 };
 
@@ -16,33 +16,33 @@ fn smoke() {
 
 #[test]
 fn request_response_format() {
-    type CheckFn = fn(&anyhow::Result<Response>) -> Result<(), String>;
-    fn expect_json(response: &anyhow::Result<Response>) -> Result<(), String> {
+    type CheckFn = fn(&Result<Response, ValhallaError>) -> Result<(), String>;
+    fn expect_json(response: &Result<Response, ValhallaError>) -> Result<(), String> {
         match response {
             Ok(Response::Json(str)) if str.starts_with('{') && str.ends_with('}') => Ok(()),
             Ok(Response::Json(str)) if str.starts_with("[{") && str.ends_with("}]") => Ok(()),
             _ => Err(format!("Expected JSON response, got: {response:?}")),
         }
     }
-    let expect_json_warn = |response: &anyhow::Result<Response>| {
+    let expect_json_warn = |response: &Result<Response, ValhallaError>| {
         expect_json(response).and_then(|_| match response {
             Ok(Response::Json(str)) if str.contains("warnings") => Ok(()),
             Ok(Response::Json(_)) => Err("Expected JSON with warnings".to_string()),
             _ => Err("Expected JSON response".to_string()),
         })
     };
-    let expect_pbf = |response: &anyhow::Result<Response>| match response {
+    let expect_pbf = |response: &Result<Response, ValhallaError>| match response {
         Ok(Response::Pbf(_)) => Ok(()),
         _ => Err(format!("Expected PBF response, got: {response:?}")),
     };
-    let expect_other = |response: &anyhow::Result<Response>| match response {
+    let expect_other = |response: &Result<Response, ValhallaError>| match response {
         Ok(Response::Other(_)) => Ok(()),
         _ => Err(format!("Expected binary response, got: {response:?}")),
     };
 
     struct EndpointTest {
         name: &'static str,
-        endpoint: fn(&mut Actor, &proto::Api) -> anyhow::Result<Response>,
+        endpoint: fn(&mut Actor, &proto::Options) -> Result<Response, ValhallaError>,
         options: proto::Options,
         format_checks: Vec<(Format, CheckFn)>,
     }
@@ -251,12 +251,9 @@ fn request_response_format() {
 
     for test in tests {
         for (format, check) in test.format_checks {
-            let request = proto::Api {
-                options: Some(proto::Options {
-                    format: format as i32,
-                    ..test.options.clone()
-                }),
-                ..Default::default()
+            let request = proto::Options {
+                format: format as i32,
+                ..test.options.clone()
             };
             let response = (test.endpoint)(&mut actor, &request);
             assert_eq!(check(&response), Ok(()), "{:?} for {format:?}", test.name);
@@ -266,25 +263,25 @@ fn request_response_format() {
 
 #[test]
 fn parse_api() {
-    assert!(Actor::parse_api("", proto::options::Action::Route).is_err());
-    assert!(Actor::parse_api("{", proto::options::Action::Route).is_err());
-    assert!(Actor::parse_api("}", proto::options::Action::Route).is_err());
+    assert!(Actor::parse_json_request("", proto::options::Action::Route).is_err());
+    assert!(Actor::parse_json_request("{", proto::options::Action::Route).is_err());
+    assert!(Actor::parse_json_request("}", proto::options::Action::Route).is_err());
 
     let json = r#"{"units":"kilometers","date_time":{"type":"current"},"costing":"auto","costing_options":{"auto":{"use_ferry":0.5,"use_rail_ferry":0.5,"use_highways":0.5,"use_tolls":0.5,"country_crossing_cost":0}},"alternates":2,"locations":[{"lat":42.50107335756198,"lon":1.510341967860551},{"lat":42.50627089323736,"lon":1.521734167223563}]}"#;
-    let api = Actor::parse_api(json, proto::options::Action::Route).expect("Failed to parse API");
-    let options = api.options.as_ref().expect("Options should be present");
-    assert_eq!(options.units, proto::options::Units::Kilometers as i32);
+    let request = Actor::parse_json_request(json, proto::options::Action::Route)
+        .expect("Failed to parse API");
+    assert_eq!(request.units, proto::options::Units::Kilometers as i32);
     // assert_eq!(options.date_time.as_ref().unwrap().type_, proto::options::DateTimeType::Current as i32);
-    assert_eq!(options.costing_type, proto::costing::Type::Auto as i32);
-    assert_eq!(options.locations.len(), 2);
-    assert_eq!(options.locations[0].ll, Some(ANDORRA_TEST_LOC_1.into()));
-    assert_eq!(options.locations[1].ll, Some(ANDORRA_TEST_LOC_2.into()));
+    assert_eq!(request.costing_type, proto::costing::Type::Auto as i32);
+    assert_eq!(request.locations.len(), 2);
+    assert_eq!(request.locations[0].ll, Some(ANDORRA_TEST_LOC_1.into()));
+    assert_eq!(request.locations[1].ll, Some(ANDORRA_TEST_LOC_2.into()));
     assert_eq!(
-        options.has_alternates,
+        request.has_alternates,
         Some(proto::options::HasAlternates::Alternates(2))
     );
 
-    let auto_costings = match options
+    let auto_costings = match request
         .costings
         .get(&(proto::costing::Type::Auto as i32))
         .and_then(|costing| costing.has_options.as_ref())
@@ -316,6 +313,6 @@ fn parse_api() {
     // Prsed request should be routable
     let config = Config::from_file(ANDORRA_CONFIG).unwrap();
     let mut actor = Actor::new(&config).unwrap();
-    let response = actor.route(&api);
+    let response = actor.route(&request);
     assert!(response.is_ok(), "Failed to route: {response:?}");
 }

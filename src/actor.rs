@@ -1,7 +1,6 @@
-use anyhow::Result;
 use prost::Message;
 
-use crate::{Config, proto::options::Format};
+use crate::{Config, ValhallaError, proto::options::Format};
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/valhalla.rs"));
@@ -26,6 +25,7 @@ mod ffi {
 
         type Actor;
         fn new_actor(config: &ptree) -> Result<UniquePtr<Actor>>;
+        // All methods accept [`proto::Options`] object serialized as a byte slice.
         fn route(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn locate(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn matrix(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
@@ -38,7 +38,8 @@ mod ffi {
         fn centroid(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn status(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
 
-        fn parse_api(json: &str, action: i32) -> Result<UniquePtr<CxxString>>;
+        /// Returns [`proto::Options`] object serialized as C++ `std::string` from a Valhalla JSON string.
+        fn parse_json_request(json: &str, action: i32) -> Result<UniquePtr<CxxString>>;
     }
 }
 
@@ -99,7 +100,7 @@ impl From<ffi::Response> for Response {
 }
 
 /// High-level interface to interact with [Valhalla's API](https://valhalla.github.io/valhalla/api/).
-/// On contrary to the Valhalla REST and C++ APIs, this interface is designed to be used with [`proto::Api`] only,
+/// On contrary to the Valhalla REST and C++ APIs, this interface is designed to be used with [`proto::Options`] only,
 /// to avoid unnecessary conversions and to provide a strongly typed interface.
 pub struct Actor {
     inner: cxx::UniquePtr<ffi::Actor>,
@@ -116,59 +117,65 @@ impl Actor {
     /// };
     /// let actor = valhalla::Actor::new(&config);
     /// ```
-    pub fn new(config: &Config) -> Result<Self> {
+    pub fn new(config: &Config) -> Result<Self, ValhallaError> {
         Ok(Self {
             inner: ffi::new_actor(config.inner())?,
             buffer: Vec::with_capacity(Self::INPUT_BUFFER_SIZE),
         })
     }
 
-    pub fn route(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn route(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::route, request)
     }
 
-    pub fn locate(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn locate(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::locate, request)
     }
 
-    pub fn matrix(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn matrix(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::matrix, request)
     }
 
-    pub fn optimized_route(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn optimized_route(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::optimized_route, request)
     }
 
-    pub fn isochrone(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn isochrone(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::isochrone, request)
     }
 
-    pub fn trace_route(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn trace_route(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::trace_route, request)
     }
 
-    pub fn trace_attributes(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn trace_attributes(
+        &mut self,
+        request: &proto::Options,
+    ) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::trace_attributes, request)
     }
 
-    pub fn transit_available(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn transit_available(
+        &mut self,
+        request: &proto::Options,
+    ) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::transit_available, request)
     }
 
-    pub fn expansion(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn expansion(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::expansion, request)
     }
 
-    pub fn centroid(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn centroid(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::centroid, request)
     }
 
-    pub fn status(&mut self, request: &proto::Api) -> Result<Response> {
+    pub fn status(&mut self, request: &proto::Options) -> Result<Response, ValhallaError> {
         self.act(ffi::Actor::status, request)
     }
 
     /// Generic helper function to process request encoding, calling the endpoint and handling cleanup.
-    fn act<F>(&mut self, endpoint: F, request: &proto::Api) -> Result<Response>
+    fn act<F>(&mut self, endpoint: F, request: &proto::Options) -> Result<Response, ValhallaError>
     where
         F: for<'a> FnOnce(
             std::pin::Pin<&'a mut ffi::Actor>,
@@ -179,49 +186,48 @@ impl Actor {
         self.buffer.reserve(request.encoded_len());
         request.encode_raw(&mut self.buffer);
 
-        let result = match endpoint(self.inner.as_mut().unwrap(), &self.buffer) {
-            Ok(response) => Ok(Response::from(response)),
-            Err(err) => Err(anyhow::Error::from(err)),
-        };
+        let result = endpoint(self.inner.as_mut().unwrap(), &self.buffer);
 
         // Single huge request can lead to excessive memory usage, let's keep it manageable.
         if self.buffer.capacity() > Self::INPUT_BUFFER_SIZE {
             self.buffer = Vec::with_capacity(Self::INPUT_BUFFER_SIZE);
         }
 
-        result
+        Ok(Response::from(result?))
     }
 
-    /// Helper function to convert a Valhalla JSON string to a Valhalla API request.
-    /// This function is not optimized for performance and should be considered a convenience method.
-    /// For best performance use [`proto::Api`] directly.
-    pub fn parse_api(json: &str, action: proto::options::Action) -> Result<proto::Api> {
+    /// Helper function to convert a Valhalla JSON string into Valhalla PBF request as [`proto::Options`] object.
+    /// This function is not optimized for performance and should be considered as a convenience method.
+    /// For best performance construct [`proto::Options`] directly if possible.
+    pub fn parse_json_request(
+        json: &str,
+        action: proto::options::Action,
+    ) -> Result<proto::Options, ValhallaError> {
         if json.is_empty() {
             // Empty string is a special for Valhalla, so we should return an error here.
-            return Err(anyhow::anyhow!("Failed to parse json request"));
+            return Err(ValhallaError("Failed to parse json request".into()));
         }
 
-        let cxx_string = ffi::parse_api(json, action as i32)?;
-        let mut api = proto::Api::decode(cxx_string.as_bytes())?;
+        let cxx_string = ffi::parse_json_request(json, action as i32)?;
+        let mut options = proto::Options::decode(cxx_string.as_bytes())
+            .map_err(|err| ValhallaError(err.to_string().into()))?;
 
         // Workaround for "ignore_closures in costing and exclude_closures in search_filter cannot both be specified"
         // that is happened because this check is happens before that value is set to the default false and processing
         // json request actually causes parsing function to be called twice because it parses and sets default values.
-        if let Some(options) = &mut api.options {
-            for costing in options.costings.values_mut() {
-                if let Some(proto::costing::HasOptions::Options(costing_options)) =
-                    &mut costing.has_options
+        for costing in options.costings.values_mut() {
+            if let Some(proto::costing::HasOptions::Options(costing_options)) =
+                &mut costing.has_options
+            {
+                // If ignore_closures is false, we can clear it
+                if let Some(proto::costing::options::HasIgnoreClosures::IgnoreClosures(false)) =
+                    costing_options.has_ignore_closures
                 {
-                    // If ignore_closures is false, we can clear it
-                    if let Some(proto::costing::options::HasIgnoreClosures::IgnoreClosures(false)) =
-                        costing_options.has_ignore_closures
-                    {
-                        costing_options.has_ignore_closures = None;
-                    }
+                    costing_options.has_ignore_closures = None;
                 }
             }
         }
 
-        Ok(api)
+        Ok(options)
     }
 }
