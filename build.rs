@@ -12,17 +12,8 @@ fn main() {
         _ => "Release",
     };
 
-    // Copy valhalla source to OUT_DIR to avoid modifying the original source that is happening in
-    // `valhalla/third_party/tz/leapseconds`
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    let valhalla_src = Path::new(&out_dir).join("valhalla-src");
-    if valhalla_src.exists() {
-        fs::remove_dir_all(&valhalla_src).expect("Failed to remove existing valhalla source");
-    }
-    copy_dir("valhalla", &valhalla_src).expect("Failed to copy valhalla source");
-
     // Build & link required Valhalla libraries
-    let dst = cmake::Config::new(&valhalla_src)
+    let dst = cmake::Config::new("valhalla")
         .define("CMAKE_BUILD_TYPE", build_type)
         .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON") // Required to extract include paths
         // // Enable link-time optimization only in Release configuration to have reasonable compile times in Debug
@@ -44,6 +35,9 @@ fn main() {
         .define("LOGGING_LEVEL", "WARN") // todo: Provide an API for setting custom loggers to Valhalla
         .build_target("valhalla")
         .build();
+    // Clean up temporary created `valhalla/third_party/tz/leapseconds` to keep source tree clean.
+    std::fs::remove_file("valhalla/third_party/tz/leapseconds")
+        .expect("Failed to remove leapseconds temp file");
 
     let valhalla_includes = extract_includes(&dst.join("build/compile_commands.json"), "config.cc");
 
@@ -85,56 +79,6 @@ fn main() {
         .collect();
     prost_build::compile_protos(&proto_files, &["valhalla/proto/"])
         .expect("Failed to compile proto files");
-}
-
-/// Recursively copy directory from src to dst, handling special files gracefully
-fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
-    let src = src.as_ref();
-    let dst = dst.as_ref();
-
-    fs::create_dir_all(dst)?;
-
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        let file_type = entry.file_type()?;
-
-        if file_type.is_dir() {
-            // Valhalla is added as git submodule and contains own submodules as well
-            if entry.file_name() != ".git" {
-                copy_dir(&src_path, &dst_path)?;
-            }
-        } else if file_type.is_file() {
-            fs::copy(&src_path, &dst_path)?;
-        } else if file_type.is_symlink() {
-            // Handle symlinks by copying the target or skipping if broken
-            match fs::read_link(&src_path) {
-                Ok(target) => {
-                    // Try to create the symlink, fall back to copying the target if possible
-                    if std::os::unix::fs::symlink(&target, &dst_path).is_err() {
-                        // If symlinking fails, try to copy the target file/dir
-                        if let Ok(resolved) = src_path.canonicalize() {
-                            if resolved.is_dir() {
-                                copy_dir(&resolved, &dst_path)?;
-                            } else if resolved.is_file() {
-                                fs::copy(&resolved, &dst_path)?;
-                            }
-                        }
-                        // If all else fails, just skip this file
-                    }
-                }
-                Err(_) => {
-                    // Broken symlink, skip it
-                    eprintln!("Warning: Skipping broken symlink: {src_path:?}");
-                }
-            }
-        }
-        // Skip other special files (devices, sockets, etc.)
-    }
-
-    Ok(())
 }
 
 /// https://clang.llvm.org/docs/JSONCompilationDatabase.html
