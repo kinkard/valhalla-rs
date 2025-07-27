@@ -51,11 +51,11 @@ fn request_response_format() {
         costing_type: proto::costing::Type::Auto as i32,
         locations: vec![
             proto::Location {
-                ll: Some(ANDORRA_TEST_LOC_1.into()),
+                ll: ANDORRA_TEST_LOC_1.into(),
                 ..Default::default()
             },
             proto::Location {
-                ll: Some(ANDORRA_TEST_LOC_2.into()),
+                ll: ANDORRA_TEST_LOC_2.into(),
                 ..Default::default()
             },
         ],
@@ -80,7 +80,7 @@ fn request_response_format() {
             endpoint: Actor::locate,
             options: proto::Options {
                 locations: vec![proto::Location {
-                    ll: Some(ANDORRA_TEST_LOC_1.into()),
+                    ll: ANDORRA_TEST_LOC_1.into(),
                     ..Default::default()
                 }],
                 has_verbose: Some(proto::options::HasVerbose::Verbose(true)), // for more detailed output
@@ -130,7 +130,7 @@ fn request_response_format() {
             options: proto::Options {
                 costing_type: proto::costing::Type::Auto as i32,
                 locations: vec![proto::Location {
-                    ll: Some(ANDORRA_TEST_LOC_2.into()),
+                    ll: ANDORRA_TEST_LOC_2.into(),
                     ..Default::default()
                 }],
                 contours: vec![proto::Contour {
@@ -314,5 +314,7 @@ fn parse_api() {
     let config = Config::from_file(ANDORRA_CONFIG).unwrap();
     let mut actor = Actor::new(&config).unwrap();
     let response = actor.route(&request);
-    assert!(response.is_ok(), "Failed to route: {response:?}");
+    let Ok(Response::Json(api)) = response else {
+        panic!("Expected JSON response, got: {response:?}");
+    };
 }

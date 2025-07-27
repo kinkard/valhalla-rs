@@ -16,11 +16,11 @@ fn route(c: &mut Criterion) {
             costing_type: proto::costing::Type::Auto as i32,
             locations: vec![
                 proto::Location {
-                    ll: Some(ANDORRA_TEST_LOC_1.into()),
+                    ll: ANDORRA_TEST_LOC_1.into(),
                     ..Default::default()
                 },
                 proto::Location {
-                    ll: Some(ANDORRA_TEST_LOC_2.into()),
+                    ll: ANDORRA_TEST_LOC_2.into(),
                     ..Default::default()
                 },
             ],
@@ -39,11 +39,11 @@ fn route(c: &mut Criterion) {
             costing_type: proto::costing::Type::Auto as i32,
             locations: vec![
                 proto::Location {
-                    ll: Some(ANDORRA_TEST_LOC_1.into()),
+                    ll: ANDORRA_TEST_LOC_1.into(),
                     ..Default::default()
                 },
                 proto::Location {
-                    ll: Some(ANDORRA_TEST_LOC_2.into()),
+                    ll: ANDORRA_TEST_LOC_2.into(),
                     ..Default::default()
                 },
             ],
@@ -62,11 +62,11 @@ fn route(c: &mut Criterion) {
             costing_type: proto::costing::Type::Auto as i32,
             locations: vec![
                 proto::Location {
-                    ll: Some(LatLon(42.54381401912126, 1.4756460643803673).into()),
+                    ll: LatLon(42.54381401912126, 1.4756460643803673).into(),
                     ..Default::default()
                 },
                 proto::Location {
-                    ll: Some(LatLon(42.54262715333714, 1.7332292461658099).into()),
+                    ll: LatLon(42.54262715333714, 1.7332292461658099).into(),
                     ..Default::default()
                 },
             ],
@@ -85,11 +85,11 @@ fn route(c: &mut Criterion) {
             costing_type: proto::costing::Type::Auto as i32,
             locations: vec![
                 proto::Location {
-                    ll: Some(LatLon(42.54381401912126, 1.4756460643803673).into()),
+                    ll: LatLon(42.54381401912126, 1.4756460643803673).into(),
                     ..Default::default()
                 },
                 proto::Location {
-                    ll: Some(LatLon(42.54262715333714, 1.7332292461658099).into()),
+                    ll: LatLon(42.54262715333714, 1.7332292461658099).into(),
                     ..Default::default()
                 },
             ],
@@ -146,7 +146,7 @@ fn locate(c: &mut Criterion) {
     c.bench_function("locate", |b| {
         let request = proto::Options {
             locations: vec![proto::Location {
-                ll: Some(ANDORRA_TEST_LOC_1.into()),
+                ll: ANDORRA_TEST_LOC_1.into(),
                 ..Default::default()
             }],
             ..Default::default()

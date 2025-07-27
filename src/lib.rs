@@ -328,6 +328,13 @@ impl From<LatLon> for proto::LatLng {
     }
 }
 
+/// Handy wrapper as [`proto::Location`] has optional `ll` field that actually always should be set.
+impl From<LatLon> for Option<proto::LatLng> {
+    fn from(loc: LatLon) -> Self {
+        Some(loc.into())
+    }
+}
+
 impl Default for GraphId {
     fn default() -> Self {
         Self {

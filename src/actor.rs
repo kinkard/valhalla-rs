@@ -124,46 +124,296 @@ impl Actor {
         })
     }
 
+    /// Calculates a route between locations.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_route(actor: &mut valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     format: proto::options::Format::Pbf as i32,
+    ///     costing_type: proto::costing::Type::Auto as i32,
+    ///     locations: vec![
+    ///         proto::Location {
+    ///              ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///              ..Default::default()
+    ///          },
+    ///          proto::Location {
+    ///              ll: valhalla::LatLon(55.5944, 13.0002).into(),
+    ///              ..Default::default()
+    ///          },
+    ///     ],
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.route(&request);
+    /// let Ok(valhalla::Response::Pbf(api)) = response else {
+    ///     panic!("Expected PBF response, got: {response:?}");
+    /// };
+    /// # }
+    /// ```
     pub fn route(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::route, request)
     }
 
+    /// Finds the nearest roads and intersections to input coordinates. Always returns a Valhalla JSON response.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_locate(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     locations: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     has_verbose: Some(proto::options::HasVerbose::Verbose(true)),
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.locate(&request);
+    /// let Ok(valhalla::Response::Json(json)) = response else {
+    ///     panic!("Expected JSON response, got: {response:?}");
+    /// };
+    /// # }
+    /// ```
     pub fn locate(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::locate, request)
     }
 
+    /// Computes a time-distance matrix between sources and targets.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_matrix(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     costing_type: proto::costing::Type::Auto as i32,
+    ///     sources: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     targets: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.5944, 13.0002).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.matrix(&request);
+    /// # }
+    /// ```
     pub fn matrix(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::matrix, request)
     }
 
+    /// Solves the traveling salesman problem for multiple locations.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_optimized_route(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     costing_type: proto::costing::Type::Auto as i32,
+    ///     locations: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.5944, 13.0002).into(),
+    ///             ..Default::default()
+    ///         },
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6000, 13.0050).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.optimized_route(&request);
+    /// # }
+    /// ```
     pub fn optimized_route(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::optimized_route, request)
     }
 
+    /// Computes areas reachable within specified time or distance intervals.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_isochrone(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     costing_type: proto::costing::Type::Pedestrian as i32,
+    ///     locations: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     contours: vec![
+    ///         proto::Contour {
+    ///             has_time: Some(proto::contour::HasTime::Time(10.0)),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.isochrone(&request);
+    /// # }
+    /// ```
     pub fn isochrone(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::isochrone, request)
     }
 
+    /// Map-matches a GPS trace to roads and returns a route with turn-by-turn directions.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_trace_route(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     costing_type: proto::costing::Type::Auto as i32,
+    ///     has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
+    ///         "_grbgAh~{nhF?lBAzBFvBHxBEtBKdB".into(),
+    ///     )),
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.trace_route(&request).unwrap();
+    /// # }
+    /// ```
     pub fn trace_route(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::trace_route, request)
     }
 
+    /// Map-matches a GPS trace and returns detailed edge attributes along the path.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_trace_attributes(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     costing_type: proto::costing::Type::Auto as i32,
+    ///     has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
+    ///         "_grbgAh~{nhF?lBAzBFvBHxBEtBKdB".into(),
+    ///     )),
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.trace_attributes(&request).unwrap();
+    /// # }
+    /// ```
     pub fn trace_attributes(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::trace_attributes, request)
     }
 
+    /// Checks if transit/public transportation is available at given locations.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_transit_available(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     locations: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.transit_available(&request).unwrap();
+    /// # }
+    /// ```
     pub fn transit_available(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::transit_available, request)
     }
 
+    /// Returns a GeoJSON representation of graph traversal for visualization.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_expansion(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     action: proto::options::Action::Route as i32,
+    ///     has_expansion_action: Some(proto::options::HasExpansionAction::ExpansionAction(
+    ///         proto::options::Action::Route as i32,
+    ///     )),
+    ///     costing_type: proto::costing::Type::Pedestrian as i32,
+    ///     locations: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.5944, 13.0002).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.expansion(&request).unwrap();
+    /// # }
+    /// ```
     pub fn expansion(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::expansion, request)
     }
 
+    /// Finds the least cost convergence point from multiple locations.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_centroid(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     costing_type: proto::costing::Type::Auto as i32,
+    ///     locations: vec![
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.5944, 13.0002).into(),
+    ///             ..Default::default()
+    ///         },
+    ///     ],
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.centroid(&request).unwrap();
+    /// # }
+    /// ```
     pub fn centroid(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::centroid, request)
     }
 
+    /// Returns status information about the Valhalla instance and loaded tileset.
+    ///
+    /// # Example
+    /// ```
+    /// # fn call_status(mut actor: valhalla::Actor) {
+    /// use valhalla::proto;
+    ///
+    /// let request = proto::Options {
+    ///     has_verbose: Some(proto::options::HasVerbose::Verbose(true)),
+    ///     ..Default::default()
+    /// };
+    /// let response = actor.status(&request).unwrap();
+    /// # }
+    /// ```
     pub fn status(&mut self, request: &proto::Options) -> Result<Response, Error> {
         self.act(ffi::Actor::status, request)
     }
