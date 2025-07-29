@@ -1,0 +1,30 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build docker image
+        uses: docker/build-push-action@v6
+        with:
+          # Reusing the Dockerfile image from the sanity_checks.yml for publishing to keep the environment consistent
+          file: Dockerfile
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+          tags: valhalla-rs-publisher
+
+      - name: Run 'cargo publish'
+        run: |
+          docker run --rm \
+            -e CARGO_REGISTRY_TOKEN="${{ secrets.CARGO_REGISTRY_TOKEN }}" \
+             valhalla-rs-publisher \
+            cargo publish

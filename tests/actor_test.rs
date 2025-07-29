@@ -314,7 +314,7 @@ fn parse_api() {
     let config = Config::from_file(ANDORRA_CONFIG).unwrap();
     let mut actor = Actor::new(&config).unwrap();
     let response = actor.route(&request);
-    let Ok(Response::Json(api)) = response else {
+    let Ok(Response::Json(_)) = response else {
         panic!("Expected JSON response, got: {response:?}");
     };
 }

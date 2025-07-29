@@ -1,9 +1,13 @@
 name: Sanity checks
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ['main']
+  pull_request:
 
 jobs:
-  docker:
+  sanity_checks:
+    name: Run Sanity Checks
     runs-on: ubuntu-latest
     steps:
       # No checkout step here because build-push-action uses git context by default:
