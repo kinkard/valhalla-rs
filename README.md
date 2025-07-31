@@ -35,11 +35,6 @@ For more details (and dependencies for other platforms), check the [Valhalla doc
 
 ## License
 
-This project contains Rust bindings for the Valhalla routing engine. The entire project is licensed under the MIT License.
+This project provides Rust bindings for the Valhalla routing engine and distributes (via [crates.io](https://crates.io/crates/valhalla)) the Valhalla source code. The entire project is licensed under the [MIT License](LICENSE).
 
-- **valhalla-rs bindings**: Copyright (c) 2025 kinkard
-- **Valhalla source code**: Copyright (c) 2018 Valhalla contributors, Copyright (c) 2015-2017 Mapillary AB, Mapzen
-
-Both components are licensed under the [MIT License](LICENSE).
-
-For the original Valhalla license, see [valhalla/COPYING](valhalla/COPYING).
+The original Valhalla license is also available at [valhalla/COPYING](https://github.com/valhalla/valhalla/blob/master/COPYING).
