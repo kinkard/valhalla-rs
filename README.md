@@ -1,16 +1,16 @@
 # About
 
-C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) to access road graph tiles, powered by [cxx](http://cxx.rs).
+C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) Routing Engine, powered by [cxx](http://cxx.rs).
 
-The main motivation behind `valhalla-rs` is to provide easy-to-start infrastructure (`cargo add valhalla` and you're done) for small utility projects that need to access Valhalla's road graph data, expose additional Valhalla functionality, or where calling Valhalla's routing engine in-process is beneficial.
+`valhalla-rs` provides drop-in infrastructure (`cargo add valhalla` and you're ready) for utility projects that need to access Valhalla's road graph data, expose additional Valhalla functionality, or benefit from calling Valhalla's routing engine in-process.
 
-[valhalla-debug](https://github.com/kinkard/valhalla-debug) is a good example of such a project.
+[valhalla-debug](https://github.com/kinkard/valhalla-debug) demonstrates this use case.
 
 Features:
 
-- [x] Reading Valhalla tiles and accessing information from road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`) - see [tiles_tests](tests/tiles_test.rs) for usage examples. _Not all getters are accessible from Rust, but can be easily added_.
-- [x] Actor API (similar to [what is accessible from Python](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb)) for Valhalla's routing engine, allowing route building and other routing operations from Rust - see [actor_tests](tests/actor_test.rs) for usage examples.
-- [ ] Writing live traffic information directly to memory-mapped traffic.tar
+- [x] **Tile access**: Read Valhalla tiles and access road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`) - see [tiles_tests](tests/tiles_test.rs) for examples
+- [x] **Actor API**: Route building and routing operations similar to [Valhalla's Python bindings](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb) - see [actor_tests](tests/actor_test.rs) for examples
+- [ ] **Live traffic**: Write traffic information directly to memory-mapped traffic.tar
 
 ## Usage
 
@@ -29,12 +29,10 @@ Since Valhalla heavily relies on system libraries, you need to install the follo
 sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
 ```
 
-The [Dockerfile](Dockerfile) with tests and sanity checks can be used as a reference for necessary dependencies and environment setup.
-
-For more details (and dependencies for other platforms), check the [Valhalla documentation](https://valhalla.github.io/valhalla/building/#platform-specific-builds).
+See the [Dockerfile](Dockerfile) for a complete reference setup, or the [Valhalla documentation](https://valhalla.github.io/valhalla/building/#platform-specific-builds) for other platforms.
 
 ## License
 
 This project provides Rust bindings for the Valhalla routing engine and distributes (via [crates.io](https://crates.io/crates/valhalla)) the Valhalla source code. The entire project is licensed under the [MIT License](LICENSE).
 
-The original Valhalla license is also available at [valhalla/COPYING](https://github.com/valhalla/valhalla/blob/master/COPYING).
+The original Valhalla license is available at [valhalla/COPYING](https://github.com/valhalla/valhalla/blob/master/COPYING).
