@@ -419,9 +419,9 @@ impl Actor {
     }
 
     /// Generic helper function to process request encoding, calling the endpoint and handling cleanup.
-    fn act<F>(&mut self, endpoint: F, request: &proto::Options) -> Result<Response, Error>
+    fn act<F>(&mut self, action_fn: F, request: &proto::Options) -> Result<Response, Error>
     where
-        F: for<'a> FnOnce(
+        F: for<'a> Fn(
             std::pin::Pin<&'a mut ffi::Actor>,
             &'a [u8],
         ) -> Result<ffi::Response, cxx::Exception>,
@@ -430,7 +430,7 @@ impl Actor {
         self.buffer.reserve(request.encoded_len());
         request.encode_raw(&mut self.buffer);
 
-        let result = endpoint(self.inner.as_mut().unwrap(), &self.buffer);
+        let result = action_fn(self.inner.as_mut().unwrap(), &self.buffer);
 
         // Single huge request can lead to excessive memory usage, let's keep it manageable.
         if self.buffer.capacity() > Self::INPUT_BUFFER_SIZE {
