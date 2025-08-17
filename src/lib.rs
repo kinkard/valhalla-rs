@@ -213,7 +213,7 @@ mod ffi {
 
         #[namespace = "valhalla::baldr"]
         type DirectedEdge;
-        /// End node of the directed edge.
+        /// End node of the directed edge. [`DirectedEdge::leaves_tile`] returns true if the end node is in a different tile.
         fn endnode(self: &DirectedEdge) -> GraphId;
         /// Returns the specialized use type of the edge.
         #[cxx_name = "use"]
@@ -236,6 +236,8 @@ mod ffi {
         fn constrained_flow_speed(self: &DirectedEdge) -> u32;
         /// Is this edge a shortcut edge.
         fn is_shortcut(self: &DirectedEdge) -> bool;
+        /// Does this directed edge end in a different tile.
+        fn leaves_tile(self: &DirectedEdge) -> bool;
 
         #[namespace = "valhalla::baldr"]
         type NodeInfo;

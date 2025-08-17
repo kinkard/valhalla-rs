@@ -175,10 +175,12 @@ fn edges_in_tile() {
             );
 
             let ei = tile.edgeinfo(de);
-            if de.is_shortcut() {
-                assert_eq!(ei.way_id, 0, "All shortcuts should have way_id 0");
-            } else {
-                assert_ne!(ei.way_id, 0, "Non-shortcuts should have valid way_id");
+            assert_eq!(de.is_shortcut(), ei.way_id == 0, "Shortcuts have way_id 0");
+
+            let endnode = de.endnode();
+            assert_eq!(de.leaves_tile(), de.endnode().tile() != tile_id.tile());
+            if de.leaves_tile() {
+                assert!(reader.get_tile(endnode.tile()).is_some());
             }
         }
         assert!(tile.directededge(slice.len() as u32).is_none());
