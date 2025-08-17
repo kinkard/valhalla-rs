@@ -27,6 +27,7 @@ exclude = [
     "**/example/*",
     "**/examples/*",
 
+    "valhalla/docker",
     "valhalla/CHANGELOG.md",
     "valhalla/run_route_scripts",
     "valhalla/src/bindings",
