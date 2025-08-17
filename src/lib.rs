@@ -213,17 +213,17 @@ mod ffi {
 
         #[namespace = "valhalla::baldr"]
         type DirectedEdge;
-        /// End node of the directed edge. [`DirectedEdge::leaves_tile`] returns true if the end node is in a different tile.
+        /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if the end node is in a different tile.
         fn endnode(self: &DirectedEdge) -> GraphId;
         /// Returns the specialized use type of the edge.
         #[cxx_name = "use"]
         fn use_type(self: &DirectedEdge) -> EdgeUse;
         /// Returns the length of the edge in meters.
         fn length(self: &DirectedEdge) -> u32;
-        /// Access modes in the forward direction. Bit mask using [`crate::access`] constants.
+        /// Access modes in the forward direction. Bit mask using [`crate::Access`] constants.
         #[rust_name = "forwardaccess_u32"]
         fn forwardaccess(self: &DirectedEdge) -> u32;
-        /// Access modes in the reverse direction. Bit mask using [`crate::access`] constants.
+        /// Access modes in the reverse direction. Bit mask using [`crate::Access`] constants.
         #[rust_name = "reverseaccess_u32"]
         fn reverseaccess(self: &DirectedEdge) -> u32;
         /// Returns the default speed in km/h for this edge.
@@ -241,10 +241,10 @@ mod ffi {
 
         #[namespace = "valhalla::baldr"]
         type NodeInfo;
-        /// Access modes allowed to pass through the node. Bit mask using [`crate::access`] constants.
+        /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
         fn access(self: &NodeInfo) -> u16;
         /// Time zone index of the node. Corresponding [`crate::TimeZoneInfo`] can be retrieved
-        /// using [`crate::TimeZoneInfo::from_id`].
+        /// using [`crate::TimeZoneInfo::from_id()`].
         fn timezone(self: &NodeInfo) -> u32;
 
         fn from_id(id: u32, unix_timestamp: u64) -> Result<TimeZoneInfo>;
@@ -511,8 +511,8 @@ impl GraphTile {
     /// Overall edge speed, mixed from different [`SpeedSources`] in km/h. As not all requested speed sources may be
     /// available for the edge, this function returns `(speed_kmh: u32, sources: SpeedSources)` tuple.
     ///
-    /// This function never returns zero speed, even if the edge is closed due to traffic. [`GraphTile::edge_closed`]
-    ///  or [`GraphTile::live_speed`] should be used to determine if the edge is closed instead.
+    /// This function never returns zero speed, even if the edge is closed due to traffic. [`GraphTile::edge_closed()`]
+    ///  or [`GraphTile::live_speed()`] should be used to determine if the edge is closed instead.
     pub fn edge_speed(
         &self,
         de: &ffi::DirectedEdge,
@@ -537,13 +537,13 @@ impl GraphTile {
 }
 
 impl DirectedEdge {
-    /// Access modes in the forward direction. Bit mask using [`crate::access`] constants.
+    /// Access modes in the forward direction. Bit mask using [`Access`] constants.
     #[inline(always)]
     pub fn forwardaccess(&self) -> Access {
         Access::from_bits_retain(self.forwardaccess_u32() as u16)
     }
 
-    /// Access modes in the reverse direction. Bit mask using [`crate::access`] constants.
+    /// Access modes in the reverse direction. Bit mask using [`Access`] constants.
     #[inline(always)]
     pub fn reverseaccess(&self) -> Access {
         Access::from_bits_retain(self.reverseaccess_u32() as u16)
