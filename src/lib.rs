@@ -32,7 +32,7 @@ mod ffi {
 
     /// Identifier of a node or an edge within the tiled, hierarchical graph.
     /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
-    #[derive(Clone, Copy, Debug, Eq)]
+    #[derive(Clone, Copy, Eq)]
     struct GraphId {
         value: u64,
     }
@@ -259,6 +259,55 @@ unsafe impl Sync for ffi::TileSet {}
 unsafe impl Send for ffi::GraphTile {}
 unsafe impl Sync for ffi::GraphTile {}
 
+impl Default for GraphId {
+    fn default() -> Self {
+        Self {
+            // `valhalla::baldr::kInvalidGraphId`
+            value: 0x3fffffffffff,
+        }
+    }
+}
+
+impl fmt::Debug for GraphId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GraphId")
+            .field("level", &self.level())
+            .field("tileid", &self.tileid())
+            .field("id", &self.id())
+            .finish()
+    }
+}
+
+impl fmt::Display for GraphId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}/{}/{}", self.level(), self.tileid(), self.id())
+    }
+}
+
+impl PartialEq for GraphId {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Hash for GraphId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+    }
+}
+
+impl GraphId {
+    pub fn new(value: u64) -> Self {
+        Self { value }
+    }
+
+    /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
+    /// Returns `None` if the level is invalid (greater than 7) or if the tile ID is invalid (greater than 2^22).
+    pub fn from_parts(level: u32, tileid: u32, id: u32) -> Option<Self> {
+        ffi::from_parts(level, tileid, id).ok()
+    }
+}
+
 /// Represents errors returned by the Valhalla C++ API.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error(Box<str>);
@@ -334,39 +383,6 @@ impl From<LatLon> for proto::LatLng {
 impl From<LatLon> for Option<proto::LatLng> {
     fn from(loc: LatLon) -> Self {
         Some(loc.into())
-    }
-}
-
-impl Default for GraphId {
-    fn default() -> Self {
-        Self {
-            // `valhalla::baldr::kInvalidGraphId`
-            value: 0x3fffffffffff,
-        }
-    }
-}
-
-impl PartialEq for GraphId {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl Hash for GraphId {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.value.hash(state);
-    }
-}
-
-impl GraphId {
-    pub fn new(value: u64) -> Self {
-        Self { value }
-    }
-
-    /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
-    /// Returns `None` if the level is invalid (greater than 7) or if the tile ID is invalid (greater than 2^22).
-    pub fn from_parts(level: u32, tileid: u32, id: u32) -> Option<Self> {
-        ffi::from_parts(level, tileid, id).ok()
     }
 }
 
@@ -571,6 +587,11 @@ mod tests {
             GraphId::from_parts(id.level(), id.tileid(), id.id()),
             Some(id)
         );
+        assert_eq!(format!("{id}"), "2/838852/161285");
+        assert_eq!(
+            format!("{id:?}"),
+            "GraphId { level: 2, tileid: 838852, id: 161285 }"
+        );
 
         let base = id.tile();
         assert_eq!(base.level(), 2);
@@ -580,6 +601,8 @@ mod tests {
 
         let default_id = GraphId::default();
         assert_eq!(default_id.level(), 7);
+        assert_eq!(default_id.tileid(), 4194303);
+        assert_eq!(default_id.id(), 2097151);
 
         assert_eq!(GraphId::from_parts(8, id.tileid(), 0), None);
     }
