@@ -33,7 +33,6 @@ std::shared_ptr<TileSet> new_tileset(const boost::property_tree::ptree& pt) {
         .traffic_tiles_ = std::move(extract.traffic_tiles),
         .tar_ = std::move(extract.archive),
         .traffic_tar_ = std::move(extract.traffic_archive),
-        .checksum_ = extract.checksum,
       };
     }
   };

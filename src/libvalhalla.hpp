@@ -31,7 +31,6 @@ struct TileSet {
   std::unordered_map<uint64_t, std::pair<char*, size_t>> traffic_tiles_;
   std::shared_ptr<valhalla::midgard::tar> tar_;
   std::shared_ptr<valhalla::midgard::tar> traffic_tar_;
-  uint64_t checksum_;
 
   rust::Vec<valhalla::baldr::GraphId> tiles() const;
   rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
