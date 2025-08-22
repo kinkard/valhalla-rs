@@ -10,7 +10,19 @@ Features:
 
 - [x] **Tile access**: Read Valhalla tiles and access road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`) - see [tiles_tests](tests/tiles_test.rs) for examples
 - [x] **Actor API**: Route building and routing operations similar to [Valhalla's Python bindings](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb) - see [actor_tests](tests/actor_test.rs) for examples
-- [ ] **Live traffic**: Write traffic information directly to memory-mapped traffic.tar
+
+TODOs:
+
+- [ ] **Live traffic**: Write live traffic information directly to memory-mapped traffic.tar, as well as utilities for sharing live traffic data between Valhalla instances.
+- [ ] **Logging**: Redirect Valhalla logging to Rust's `tracing` crate or provide an interface for redirecting it to a custom logger.
+- [ ] **Reading individual tile files**: Support reading info from Valhalla tiles from `tile_dir` (individual file per tile). Currently only `tile_extract` (single tiles.tar file) is supported.
+- [ ] **Historical traffic**: All minor functionality for out-of-the-box historical traffic support. Currently minor stuff should be done manually, such as converting `GraphId` to the tile file name or writing historical speeds (free flow, congested, 5m bins) to the csv files.
+
+Design choices:
+
+- `valhalla::GraphReader` is intended to be as simple as possible and hold no mutable inner state, leaving the caching and other optimizations to the caller. This allows for easy reuse of the same `GraphReader` instance across multiple threads.
+- `valhalla::Actor` accepts only `proto::Options` and not `proto::Api` or Valhalla JSON request to have small strongly-typed API. Still, there is a convenience method to convert JSON into `proto::Options` called `valhalla::Actor::parse_json_request()`.
+- `valhalla::EdgeInfo::shape` direction is aligned with the edge direction. For comparison, in C++ Valhalla user should revert the shape based on `DirectedEdge::forward` flag (so both forward and reverse edges can use the same `EdgeInfo`). Because of how C++-to-Rust bindings work, additional allocation is required any way, so it was simpler to just always return the shape in the correct direction.
 
 ## Usage
 
