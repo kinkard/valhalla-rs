@@ -213,30 +213,40 @@ mod ffi {
 
         #[namespace = "valhalla::baldr"]
         type DirectedEdge;
-        /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if the end node is in a different tile.
+        /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if end node is in a different tile.
         fn endnode(self: &DirectedEdge) -> GraphId;
-        /// Returns the specialized use type of the edge.
+        /// Specialized use type of the edge.
         #[cxx_name = "use"]
         fn use_type(self: &DirectedEdge) -> EdgeUse;
-        /// Returns the length of the edge in meters.
+        /// Length of the edge in meters.
         fn length(self: &DirectedEdge) -> u32;
+        /// Whether this edge is part of a toll road.
+        fn toll(self: &DirectedEdge) -> bool;
+        /// Whether this edge is private or destination-only access.
+        fn destonly(self: &DirectedEdge) -> bool;
+        /// Whether this edge is part of a tunnel.
+        fn tunnel(self: &DirectedEdge) -> bool;
+        /// Whether this edge is part of a bridge.
+        fn bridge(self: &DirectedEdge) -> bool;
+        /// Whether this edge is part of a roundabout.
+        fn roundabout(self: &DirectedEdge) -> bool;
         /// Access modes in the forward direction. Bit mask using [`crate::Access`] constants.
         #[rust_name = "forwardaccess_u32"]
         fn forwardaccess(self: &DirectedEdge) -> u32;
         /// Access modes in the reverse direction. Bit mask using [`crate::Access`] constants.
         #[rust_name = "reverseaccess_u32"]
         fn reverseaccess(self: &DirectedEdge) -> u32;
-        /// Returns the default speed in km/h for this edge.
+        /// Default speed in km/h for this edge.
         fn speed(self: &DirectedEdge) -> u32;
-        /// Returns the truck speed in km/h for this edge.
+        /// Truck speed in km/h for this edge.
         fn truck_speed(self: &DirectedEdge) -> u32;
-        /// Returns the free flow speed (typical speed during night, from 7pm to 7am) in km/h for this edge.
+        /// Free flow speed (typical speed during night, from 7pm to 7am) in km/h for this edge.
         fn free_flow_speed(self: &DirectedEdge) -> u32;
-        /// Returns the constrained flow speed (typical speed during day, from 7am to 7pm) in km/h for this edge.
+        /// Constrained flow speed (typical speed during day, from 7am to 7pm) in km/h for this edge.
         fn constrained_flow_speed(self: &DirectedEdge) -> u32;
-        /// Is this edge a shortcut edge.
+        /// Whether this edge is a shortcut edge.
         fn is_shortcut(self: &DirectedEdge) -> bool;
-        /// Does this directed edge end in a different tile.
+        /// Whether this directed edge ends in a different tile.
         fn leaves_tile(self: &DirectedEdge) -> bool;
 
         #[namespace = "valhalla::baldr"]
@@ -247,6 +257,7 @@ mod ffi {
         /// using [`crate::TimeZoneInfo::from_id()`].
         fn timezone(self: &NodeInfo) -> u32;
 
+        /// Retrieves the timezone information by its index. `unix_timestamp` is required to handle DST/SDT.
         fn from_id(id: u32, unix_timestamp: u64) -> Result<TimeZoneInfo>;
     }
 }
