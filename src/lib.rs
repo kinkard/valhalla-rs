@@ -428,7 +428,10 @@ pub struct GraphReader(cxx::SharedPtr<ffi::TileSet>);
 
 impl GraphReader {
     /// Creates a new GraphReader from the given Valhalla configuration, parsed into a [`Config`].
-    /// ```rust
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// let Ok(config) = valhalla::Config::from_file("path/to/config.json") else {
     ///     return; // Handle error appropriately
     /// };
@@ -610,7 +613,7 @@ impl NodeInfo {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```
     /// # fn call_edges(reader: &valhalla::GraphReader) -> Option<()> {
     /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
     ///
@@ -654,7 +657,8 @@ impl CostingModel {
     /// Creates a new costing model of the given type with default options.
     ///
     /// # Examples
-    /// ```rust
+    ///
+    /// ```
     /// use valhalla::{CostingModel, proto};
     ///
     /// let cost_model = CostingModel::new(proto::costing::Type::Auto).unwrap();
@@ -673,7 +677,8 @@ impl CostingModel {
     /// [costing options]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-options
     ///
     /// # Examples
-    /// ```rust
+    ///
+    /// ```
     /// use valhalla::{CostingModel, proto};
     ///
     /// let cost_model = CostingModel::with_options(&proto::Costing {

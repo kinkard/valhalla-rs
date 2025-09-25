@@ -107,7 +107,7 @@ pub struct Actor {
 impl Actor {
     const INPUT_BUFFER_SIZE: usize = 1024; // 1 KiB is more than enough for most requests.
 
-    /// ```rust
+    /// ```
     /// let Ok(config) = valhalla::Config::from_file("path/to/config.json") else {
     ///     return; // Handle error appropriately
     /// };
@@ -123,6 +123,7 @@ impl Actor {
     /// Calculates a route between locations.
     ///
     /// # Example
+    ///
     /// ```
     /// # fn call_route(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
@@ -154,7 +155,8 @@ impl Actor {
 
     /// Finds the nearest roads and intersections to input coordinates. Always returns a Valhalla JSON response.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_locate(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -181,7 +183,8 @@ impl Actor {
 
     /// Computes a time-distance matrix between sources and targets.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_matrix(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -211,7 +214,8 @@ impl Actor {
 
     /// Solves the traveling salesman problem for multiple locations.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_optimized_route(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -243,7 +247,8 @@ impl Actor {
 
     /// Computes areas reachable within specified time or distance intervals.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_isochrone(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -273,7 +278,8 @@ impl Actor {
 
     /// Map-matches a GPS trace to roads and returns a route with turn-by-turn directions.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_trace_route(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -294,7 +300,8 @@ impl Actor {
 
     /// Map-matches a GPS trace and returns detailed edge attributes along the path.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_trace_attributes(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -315,7 +322,8 @@ impl Actor {
 
     /// Checks if transit/public transportation is available at given locations.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_transit_available(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -338,7 +346,8 @@ impl Actor {
 
     /// Returns a GeoJSON representation of graph traversal for visualization.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_expansion(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -370,7 +379,8 @@ impl Actor {
 
     /// Finds the least cost convergence point from multiple locations.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_centroid(mut actor: valhalla::Actor) {
     /// use valhalla::proto;
@@ -398,7 +408,8 @@ impl Actor {
 
     /// Returns status information about the Valhalla instance and loaded tileset.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// # fn call_status(mut actor: valhalla::Actor) {
     /// use valhalla::proto;

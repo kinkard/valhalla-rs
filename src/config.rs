@@ -23,7 +23,10 @@ pub struct Config(cxx::UniquePtr<ffi::ptree>);
 
 impl Config {
     /// Reads configuration from the given Valhalla configuration file.
-    /// ```rust
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// let config = valhalla::Config::from_file("path/to/config.json");
     /// ```
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
@@ -33,7 +36,10 @@ impl Config {
     }
 
     /// Reads configuration from Valhalla configuration JSON string.
-    /// ```rust
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// let json = r#"{"mjolnir":{"tile_extract":"path/to/tiles.tar","traffic_extract":"path/to/traffic.tar"}}"#;
     /// let config = valhalla::Config::from_json(&json);
     /// ```
@@ -42,7 +48,10 @@ impl Config {
     }
 
     /// Creates a new Valhalla configuration from path to the tiles tar extract.
-    /// ```rust
+    ///
+    /// # Examples
+    ///
+    /// ```
     /// let config = valhalla::Config::from_tile_extract("path/to/tiles.tar");
     /// ```
     pub fn from_tile_extract(tile_extract: impl AsRef<Path>) -> Result<Self, Error> {
