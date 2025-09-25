@@ -445,27 +445,25 @@ impl GraphReader {
 /// `GraphTile` can outlive the [`GraphReader`] that created it. Cloning is cheap as it only
 /// copies an atomic shared pointer (C++'s version of [`std::sync::Arc`]) to the underlying tile data.
 #[derive(Clone)]
-pub struct GraphTile {
-    tile: cxx::SharedPtr<ffi::GraphTile>,
-}
+pub struct GraphTile(cxx::SharedPtr<ffi::GraphTile>);
 
 impl GraphTile {
     fn new(tile: cxx::SharedPtr<ffi::GraphTile>) -> Option<Self> {
         if tile.is_null() {
             None
         } else {
-            Some(Self { tile })
+            Some(Self(tile))
         }
     }
 
     /// GraphID of the tile, which includes the tile ID and hierarchy level.
     pub fn id(&self) -> GraphId {
-        self.tile.id()
+        self.0.id()
     }
 
     /// Slice of all directed edges in the current tile.
     pub fn directededges(&self) -> &[ffi::DirectedEdge] {
-        let slice = ffi::directededges(&self.tile);
+        let slice = ffi::directededges(&self.0);
         if slice.len == 0 {
             return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
         }
@@ -480,7 +478,7 @@ impl GraphTile {
 
     /// Index of the directed edge within the current tile if it exists.
     pub fn directededge(&self, index: u32) -> Option<&ffi::DirectedEdge> {
-        match self.tile.directededge(index as usize) {
+        match self.0.directededge(index as usize) {
             Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
             // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
             // But it also sounds nice to handle nullptr in the same way.
@@ -489,7 +487,7 @@ impl GraphTile {
     }
 
     pub fn nodes(&self) -> &[ffi::NodeInfo] {
-        let slice = ffi::nodes(&self.tile);
+        let slice = ffi::nodes(&self.0);
         if slice.len == 0 {
             return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
         }
@@ -504,7 +502,7 @@ impl GraphTile {
 
     /// Index of the node within the current tile if it exists.
     pub fn node(&self, index: u32) -> Option<&ffi::NodeInfo> {
-        match self.tile.node(index as usize) {
+        match self.0.node(index as usize) {
             Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
             // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
             // But it also sounds nice to handle nullptr in the same way.
@@ -514,12 +512,12 @@ impl GraphTile {
 
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
     pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
-        ffi::edgeinfo(&self.tile, de)
+        ffi::edgeinfo(&self.0, de)
     }
 
     /// Edge's live traffic speed in km/h if available. Returns `Some(0)` if the edge is closed due to traffic.
     pub fn live_speed(&self, de: &ffi::DirectedEdge) -> Option<u32> {
-        match ffi::live_speed(&self.tile, de) {
+        match ffi::live_speed(&self.0, de) {
             0 => Some(0), // Edge is closed due to traffic
             255 => None,  // Live speed is unknown
             speed => Some(speed as u32),
@@ -532,7 +530,7 @@ impl GraphTile {
     ///   b) we have a valid record for that edge
     ///   b) the speed is zero
     pub fn edge_closed(&self, de: &ffi::DirectedEdge) -> bool {
-        unsafe { self.tile.IsClosed(de as *const ffi::DirectedEdge) }
+        unsafe { self.0.IsClosed(de as *const ffi::DirectedEdge) }
     }
 
     /// Overall edge speed, mixed from different [`SpeedSources`] in km/h. As not all requested speed sources may be
@@ -550,7 +548,7 @@ impl GraphTile {
     ) -> (u32, SpeedSources) {
         let mut flow_sources: u8 = 0;
         let speed = unsafe {
-            self.tile.GetSpeed(
+            self.0.GetSpeed(
                 de as *const ffi::DirectedEdge,
                 speed_sources.bits(),
                 second_of_week,
