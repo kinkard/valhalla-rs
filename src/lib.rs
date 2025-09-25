@@ -4,13 +4,14 @@ use std::{
 };
 
 use bitflags::bitflags;
+use prost::Message;
 
 mod actor;
 mod config;
+pub mod proto;
 
 pub use actor::Actor;
 pub use actor::Response;
-pub use actor::proto;
 pub use config::Config;
 pub use ffi::DirectedEdge;
 pub use ffi::EdgeInfo;
@@ -260,6 +261,19 @@ mod ffi {
         /// Retrieves the timezone information by its index. `unix_timestamp` is required to handle DST/SDT.
         fn from_id(id: u32, unix_timestamp: u64) -> Result<TimeZoneInfo>;
     }
+
+    unsafe extern "C++" {
+        include!("valhalla/src/costing.hpp");
+
+        #[namespace = "valhalla::sif"]
+        type DynamicCost;
+        #[cxx_name = "Allowed"]
+        unsafe fn NodeAllowed(self: &DynamicCost, node: *const NodeInfo) -> bool;
+        unsafe fn IsAccessible(self: &DynamicCost, edge: *const DirectedEdge) -> bool;
+
+        /// Creates a new costing model from the given serialized [`crate::proto::Costing`] protobuf object.
+        fn new_cost(costing: &[u8]) -> Result<SharedPtr<DynamicCost>>;
+    }
 }
 
 // Safety: All operations do not mutate [`TileSet`] inner state.
@@ -269,6 +283,10 @@ unsafe impl Sync for ffi::TileSet {}
 // Safety: All operations do not mutate [`GraphTile`] inner state.
 unsafe impl Send for ffi::GraphTile {}
 unsafe impl Sync for ffi::GraphTile {}
+
+// Safety: All operations do not mutate [`DynamicCost`] inner state.
+unsafe impl Send for ffi::DynamicCost {}
+unsafe impl Sync for ffi::DynamicCost {}
 
 impl Default for GraphId {
     fn default() -> Self {
@@ -579,6 +597,79 @@ impl TimeZoneInfo {
     /// Retrieves the timezone information by its index if available. `unix_timestamp` is required to handle DST.
     pub fn from_id(id: u32, unix_timestamp: u64) -> Option<Self> {
         ffi::from_id(id, unix_timestamp).ok()
+    }
+}
+
+/// A [costing model] that evaluates edge traversal costs and accessibility for different travel modes
+/// (auto, bicycle, pedestrian, etc.).
+///
+/// `CostingModel` wraps Valhalla's dynamic costing algorithms to determine whether edges and nodes
+/// are accessible for a given travel mode, and to calculate the cost of traversing edges and
+/// making turns at intersections. This enables graph traversal operations such as reachability
+/// analysis, accessibility checking, and custom routing logic.
+///
+/// [costing model]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-models
+#[derive(Clone)]
+pub struct CostingModel(cxx::SharedPtr<ffi::DynamicCost>);
+
+impl CostingModel {
+    /// Creates a new costing model of the given type with default options.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use valhalla::{CostingModel, proto};
+    ///
+    /// let cost_model = CostingModel::new(proto::costing::Type::Auto).unwrap();
+    /// ```
+    pub fn new(costing_type: proto::costing::Type) -> Result<Self, Error> {
+        let costing = proto::Costing {
+            r#type: costing_type as i32,
+            ..Default::default()
+        };
+        let buf = costing.encode_to_vec();
+        Ok(Self(ffi::new_cost(&buf)?))
+    }
+
+    /// Creates a new costing model with custom [costing options].
+    ///
+    /// [costing options]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-options
+    ///
+    /// # Examples
+    /// ```rust
+    /// use valhalla::{CostingModel, proto};
+    ///
+    /// let cost_model = CostingModel::with_options(&proto::Costing {
+    ///     r#type: proto::costing::Type::Auto as i32,
+    ///     has_options: Some(proto::costing::HasOptions::Options(
+    ///         proto::costing::Options {
+    ///             exclude_tolls: true,
+    ///             exclude_ferries: true,
+    ///             ..Default::default()
+    ///         },
+    ///     )),
+    ///     ..Default::default()
+    /// }).expect("Valid costing options");
+    /// ```
+    pub fn with_options(costing: &proto::Costing) -> Result<Self, Error> {
+        let buf = costing.encode_to_vec();
+        Ok(Self(ffi::new_cost(&buf)?))
+    }
+
+    /// Checks if the node is accessible according to this costing model.
+    ///
+    /// Node access can be restricted by bollards, gates, or access restrictions
+    /// that are specific to the travel mode.
+    pub fn node_accessible(&self, node: &ffi::NodeInfo) -> bool {
+        unsafe { self.0.NodeAllowed(node as *const ffi::NodeInfo) }
+    }
+
+    /// Checks if the edge is accessible according to this costing model.
+    ///
+    /// This performs a basic accessibility check based on edge access permissions
+    /// (auto/bicycle/pedestrian) without considering turn restrictions, closures,
+    /// or routing-specific constraints.
+    pub fn edge_accessible(&self, edge: &ffi::DirectedEdge) -> bool {
+        unsafe { self.0.IsAccessible(edge as *const ffi::DirectedEdge) }
     }
 }
 

@@ -50,7 +50,7 @@ fn main() {
         .unwrap();
 
     // bindings
-    cxx_build::bridges(["src/lib.rs", "src/config.rs", "src/actor.rs"])
+    cxx_build::bridges(["src/actor.rs", "src/config.rs", "src/lib.rs"])
         .file("src/libvalhalla.cpp")
         // Hacky workaraound for linking issue because `get_formatted_date()` function is being called in header file
         // and somehow compiler is unable to resolve it when building bridge library.
@@ -65,9 +65,9 @@ fn main() {
         .compile("libvalhalla-cxxbridge");
     println!("cargo:rerun-if-changed=src/actor.hpp");
     println!("cargo:rerun-if-changed=src/config.hpp");
-    println!("cargo:rerun-if-changed=src/libvalhalla.hpp");
+    println!("cargo:rerun-if-changed=src/costing.hpp");
     println!("cargo:rerun-if-changed=src/libvalhalla.cpp");
-    println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src/libvalhalla.hpp");
     println!("cargo:rerun-if-changed=valhalla");
 
     // protos

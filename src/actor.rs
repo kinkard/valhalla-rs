@@ -1,10 +1,6 @@
 use prost::Message;
 
-use crate::{Config, Error, proto::options::Format};
-
-pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/valhalla.rs"));
-}
+use crate::{Config, Error, proto, proto::options::Format};
 
 #[allow(clippy::needless_lifetimes)] // clippy goes nuts with cxx
 #[cxx::bridge]
