@@ -216,6 +216,8 @@ mod ffi {
         type DirectedEdge;
         /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if end node is in a different tile.
         fn endnode(self: &DirectedEdge) -> GraphId;
+        /// The index of the opposing directed edge at the end node of this directed edge.
+        fn opp_index(self: &DirectedEdge) -> u32;
         /// Specialized use type of the edge.
         #[cxx_name = "use"]
         fn use_type(self: &DirectedEdge) -> EdgeUse;
@@ -252,6 +254,11 @@ mod ffi {
 
         #[namespace = "valhalla::baldr"]
         type NodeInfo;
+        /// Get the index of the first outbound edge from this node. Since all outbound edges are
+        /// in the same tile/level as the node we only need an index within the tile.
+        fn edge_index(self: &NodeInfo) -> u32;
+        /// Get the number of outbound directed edges from this node on the current hierarchy level.
+        fn edge_count(self: &NodeInfo) -> u32;
         /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
         fn access(self: &NodeInfo) -> u16;
         /// Time zone index of the node. Corresponding [`crate::TimeZoneInfo`] can be retrieved
@@ -494,7 +501,7 @@ impl GraphTile {
         unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
     }
 
-    /// Index of the directed edge within the current tile if it exists.
+    /// Gets a directed edge by index within the current tile.
     pub fn directededge(&self, index: u32) -> Option<&ffi::DirectedEdge> {
         match self.0.directededge(index as usize) {
             Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
@@ -504,6 +511,7 @@ impl GraphTile {
         }
     }
 
+    /// Slice of all node in the current tile.
     pub fn nodes(&self) -> &[ffi::NodeInfo] {
         let slice = ffi::nodes(&self.0);
         if slice.len == 0 {
@@ -518,7 +526,7 @@ impl GraphTile {
         unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
     }
 
-    /// Index of the node within the current tile if it exists.
+    /// Gets a node by index within the current tile.
     pub fn node(&self, index: u32) -> Option<&ffi::NodeInfo> {
         match self.0.node(index as usize) {
             Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
@@ -590,6 +598,36 @@ impl DirectedEdge {
     #[inline(always)]
     pub fn reverseaccess(&self) -> Access {
         Access::from_bits_retain(self.reverseaccess_u32() as u16)
+    }
+}
+
+impl NodeInfo {
+    /// Returns the range of edge indices for this node's outbound edges.
+    ///
+    /// This range can be used to slice the directed edges array from the same tile
+    /// that contains this node. The range represents indices within the tile's
+    /// edge array, not global edge identifiers.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # fn call_edges(reader: &valhalla::GraphReader) -> Option<()> {
+    /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
+    ///
+    /// // Get the tile containing the node
+    /// let tile = reader.get_tile(node_id.tile())?;
+    /// let node = tile.node(node_id.id())?;
+    ///
+    /// for edge in &tile.directededges()[node.edges()] {
+    ///     println!("- {node_id} -> {} edge has {} length", edge.endnode(), edge.length());
+    /// }
+    /// # Some(())
+    /// # }
+    /// ```
+    pub fn edges(&self) -> std::ops::Range<usize> {
+        let start = self.edge_index() as usize;
+        let count = self.edge_count() as usize;
+        start..start + count
     }
 }
 
