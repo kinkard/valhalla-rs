@@ -77,6 +77,11 @@ fn tiles_in_bbox() {
     let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
         .expect("Failed to create GraphReader");
 
+    assert!(
+        reader.get_tile(GraphId::default()).is_none(),
+        "Default tile should not exist"
+    );
+
     let mut all_tiles = reader.tiles();
     all_tiles.sort_by_key(|id| id.value); // order is not guaranteed, sort for comparison
     assert!(!all_tiles.is_empty(), "Should have tiles in the dataset");
@@ -117,6 +122,11 @@ fn tiles_in_bbox() {
             // GraphId::id() is the index of the edge in the tile, which is always 0 for the tile itself
             assert_eq!(tile_id.id(), 0);
             assert_eq!(tile_id.tile(), tile_id);
+
+            let tile = reader.get_tile(tile_id);
+            assert!(tile.is_some(), "Tile should exist for ID: {tile_id:?}");
+            let tile = tile.unwrap();
+            assert_eq!(tile.id(), tile_id, "Tile ID mismatch for {tile_id:?}");
         }
     }
 }
@@ -132,16 +142,8 @@ fn edges_in_tile() {
     let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
         .expect("Failed to create GraphReader");
 
-    assert!(
-        reader.get_tile(GraphId::default()).is_none(),
-        "Default tile should not exist"
-    );
-
     for tile_id in reader.tiles() {
-        let tile = reader.get_tile(tile_id);
-        assert!(tile.is_some(), "Tile should exist for ID: {tile_id:?}");
-        let tile = tile.unwrap();
-        assert_eq!(tile.id(), tile_id, "Tile ID mismatch for {tile_id:?}");
+        let tile = reader.get_tile(tile_id).unwrap();
 
         let slice = tile.directededges();
         assert!(!slice.is_empty(), "Tile should always have directed edges");
@@ -184,6 +186,25 @@ fn edges_in_tile() {
             }
         }
         assert!(tile.directededge(slice.len() as u32).is_none());
+    }
+}
+
+#[test]
+fn nodes_in_tile() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+
+    for tile_id in reader.tiles() {
+        let tile = reader.get_tile(tile_id).unwrap();
+
+        let tile_edges = tile.directededges();
+        let tile_transitions = tile.transitions();
 
         // Same check for nodes
         let slice = tile.nodes();
@@ -197,10 +218,54 @@ fn edges_in_tile() {
                 "node and via_ptr should have the same address"
             );
 
+            assert!(tile_edges.get(node.edges()).is_some());
+            assert!(tile_transitions.get(node.transitions()).is_some());
+
             // Europe/Andorra or Europe/Madrid or Europe/Paris timezones
             assert!(matches!(node.timezone(), 293 | 313 | 319));
         }
     }
+}
+
+#[test]
+fn transitions_in_tile() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let mut transition_count = 0;
+    for tile_id in reader.tiles() {
+        let tile = reader.get_tile(tile_id).unwrap();
+
+        // Same check for transitions
+        for (i, transition) in tile.transitions().iter().enumerate() {
+            transition_count += 1;
+
+            // Ensure that the node index matches the slice index.
+            // This assertion ensures that the pointer arithmetic in the Rust FFI is correct.
+            let via_ptr = tile.transition(i as u32).unwrap();
+            assert_eq!(
+                transition as *const _, via_ptr as *const _,
+                "transition and via_ptr should have the same address"
+            );
+
+            assert_ne!(
+                transition.endnode().tile(),
+                tile_id.tile(),
+                "Transition endnode should be in a different tile"
+            );
+            assert_eq!(
+                transition.upward(),
+                transition.endnode().level() < tile_id.level()
+            );
+        }
+    }
+    assert_eq!(transition_count, 3550); // to be changed if tileset changes
 }
 
 #[test]

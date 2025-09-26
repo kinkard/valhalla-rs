@@ -12,6 +12,7 @@ struct tar;
 struct DirectedEdgeSlice;
 struct EdgeInfo;
 struct NodeInfoSlice;
+struct NodeTransitionSlice;
 struct TimeZoneInfo;
 
 enum class GraphLevel : uint8_t {
@@ -56,6 +57,9 @@ DirectedEdgeSlice directededges(const GraphTile& tile);
 
 /// Helper function that allows to iterate over a slice of nodes of that tile in Rust
 NodeInfoSlice nodes(const GraphTile& tile);
+
+/// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
+NodeTransitionSlice transitions(const GraphTile& tile);
 
 /// Helper function that workarounds the inability to use `baldr::EdgeInfo` in Rust
 EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de);

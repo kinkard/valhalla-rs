@@ -112,6 +112,14 @@ NodeInfoSlice nodes(const GraphTile& tile) {
   };
 }
 
+NodeTransitionSlice transitions(const GraphTile& tile) {
+  const uint32_t count = tile.header()->transitioncount();
+  return NodeTransitionSlice{
+    .ptr = count ? tile.transition(0) : nullptr,
+    .len = count,
+  };
+}
+
 EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de) {
   const auto edge_info = tile.edgeinfo(&de);
 

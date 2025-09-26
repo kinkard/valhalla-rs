@@ -19,6 +19,7 @@ pub use ffi::EdgeUse;
 pub use ffi::GraphId;
 pub use ffi::GraphLevel;
 pub use ffi::NodeInfo;
+pub use ffi::NodeTransition;
 pub use ffi::TimeZoneInfo;
 
 #[cxx::bridge]
@@ -127,6 +128,14 @@ mod ffi {
         data: [u64; 4],
     }
 
+    /// Records a transition between a node on the current tile and a node
+    /// at the same position on a different hierarchy level. Stores the GraphId
+    /// of the end node as well as a flag indicating whether the transition is
+    /// upwards (true) or downwards (false).
+    struct NodeTransition {
+        data: [u64; 1],
+    }
+
     /// Helper struct to return a slice of directed edges from C++ to Rust.
     struct DirectedEdgeSlice {
         /// Pointer to the first directed edge in the span.
@@ -140,6 +149,14 @@ mod ffi {
         /// Pointer to the first node in the span.
         ptr: *const NodeInfo,
         /// Number of nodes in the span.
+        len: usize,
+    }
+
+    /// Helper struct to return a slice of node transitions from C++ to Rust.
+    struct NodeTransitionSlice {
+        /// Pointer to the first node transition in the span.
+        ptr: *const NodeTransition,
+        /// Number of node transitions in the span.
         len: usize,
     }
 
@@ -195,6 +212,8 @@ mod ffi {
         fn edgeinfo(tile: &GraphTile, de: &DirectedEdge) -> EdgeInfo;
         fn nodes(tile: &GraphTile) -> NodeInfoSlice;
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
+        fn transitions(tile: &GraphTile) -> NodeTransitionSlice;
+        fn transition(self: &GraphTile, index: u32) -> Result<*const NodeTransition>;
         unsafe fn IsClosed(self: &GraphTile, de: *const DirectedEdge) -> bool;
         unsafe fn GetSpeed(
             self: &GraphTile,
@@ -234,11 +253,11 @@ mod ffi {
         /// Whether this edge is part of a roundabout.
         fn roundabout(self: &DirectedEdge) -> bool;
         /// Access modes in the forward direction. Bit mask using [`crate::Access`] constants.
-        #[rust_name = "forwardaccess_u32"]
-        fn forwardaccess(self: &DirectedEdge) -> u32;
+        #[cxx_name = "forwardaccess"]
+        fn forwardaccess_u32(self: &DirectedEdge) -> u32;
         /// Access modes in the reverse direction. Bit mask using [`crate::Access`] constants.
-        #[rust_name = "reverseaccess_u32"]
-        fn reverseaccess(self: &DirectedEdge) -> u32;
+        #[cxx_name = "reverseaccess"]
+        fn reverseaccess_u32(self: &DirectedEdge) -> u32;
         /// Default speed in km/h for this edge.
         fn speed(self: &DirectedEdge) -> u32;
         /// Truck speed in km/h for this edge.
@@ -264,9 +283,21 @@ mod ffi {
         /// Time zone index of the node. Corresponding [`crate::TimeZoneInfo`] can be retrieved
         /// using [`crate::TimeZoneInfo::from_id()`].
         fn timezone(self: &NodeInfo) -> u32;
+        /// Get the index of the first transition from this node.
+        fn transition_index(self: &NodeInfo) -> u32;
+        /// Get the number of transitions from this node.
+        fn transition_count(self: &NodeInfo) -> u32;
 
         /// Retrieves the timezone information by its index. `unix_timestamp` is required to handle DST/SDT.
         fn from_id(id: u32, unix_timestamp: u64) -> Result<TimeZoneInfo>;
+
+        #[namespace = "valhalla::baldr"]
+        type NodeTransition;
+        /// Graph id of the corresponding node on another hierarchy level.
+        fn endnode(self: &NodeTransition) -> GraphId;
+        /// Is the transition up to a higher level.
+        #[cxx_name = "up"]
+        fn upward(self: &NodeTransition) -> bool;
     }
 
     unsafe extern "C++" {
@@ -539,6 +570,31 @@ impl GraphTile {
         }
     }
 
+    /// Slice of all node transitions in the current tile.
+    pub fn transitions(&self) -> &[ffi::NodeTransition] {
+        let slice = ffi::transitions(&self.0);
+        if slice.len == 0 {
+            return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
+        }
+
+        // Safety: correctness of the pointer arithmetic is checked by integration tests over a real dataset.
+        // This works only because of the `data: [u64; 1]` definition in [`ffi::NodeTransition`], as the Rust compiler
+        // has no way of knowing the size of the `valhalla::baldr::NodeTransition` struct and without that field Rust
+        // assumes that `ffi::NodeTransition` is a zero-sized type (ZST).
+        // At the same time, Valhalla's entire ability to work with binary files (tilesets) relies on this contract.
+        unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
+    }
+
+    /// Gets a node transition by index within the current tile.
+    pub fn transition(&self, index: u32) -> Option<&ffi::NodeTransition> {
+        match self.0.transition(index) {
+            Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
+            // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
+            // But it also sounds nice to handle nullptr in the same way.
+            _ => None,
+        }
+    }
+
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
     pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
         ffi::edgeinfo(&self.0, de)
@@ -630,6 +686,34 @@ impl NodeInfo {
     pub fn edges(&self) -> std::ops::Range<usize> {
         let start = self.edge_index() as usize;
         let count = self.edge_count() as usize;
+        start..start + count
+    }
+
+    /// Returns the range of transition indices for this node's transitions to other hierarchy levels.
+    ///
+    /// This range can be used to slice the node transitions array from the same tile
+    /// that contains this node. The range represents indices within the tile's
+    /// node transitions array, not global transition identifiers.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn call_edges(reader: &valhalla::GraphReader) -> Option<()> {
+    /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
+    ///
+    /// // Get the tile containing the node
+    /// let tile = reader.get_tile(node_id.tile())?;
+    /// let node = tile.node(node_id.id())?;
+    ///
+    /// for transition in &tile.transitions()[node.transitions()] {
+    ///     println!("- {node_id} has a transition to the {} node", transition.endnode());
+    /// }
+    /// # Some(())
+    /// # }
+    /// ```
+    pub fn transitions(&self) -> std::ops::Range<usize> {
+        let start = self.transition_index() as usize;
+        let count = self.transition_count() as usize;
         start..start + count
     }
 }

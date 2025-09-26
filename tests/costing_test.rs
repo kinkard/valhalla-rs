@@ -49,8 +49,23 @@ fn costing_model() {
                 if !costing.node_accessible(node) {
                     continue;
                 }
-
                 let curr_length = *node_labels.get(&node_id).unwrap();
+
+                for transition in &tile.transitions()[node.transitions()] {
+                    let next_node_id = transition.endnode();
+                    if next_node_id.level() == 2 { // exploring all edges in the 2nd level takes too long
+                        continue;
+                    }
+
+                    if node_labels
+                        .get(&next_node_id)
+                        .is_none_or(|&length| curr_length < length)
+                    {
+                        node_labels.insert(next_node_id, curr_length);
+                        to_visit.push_back(next_node_id);
+                    }
+                }
+
                 for de in &tile.directededges()[node.edges()] {
                     if !costing.edge_accessible(de) {
                         continue;
@@ -75,13 +90,17 @@ fn costing_model() {
     let first_node = tile.directededge(edges[0]).unwrap().endnode();
     let second_node = tile.directededge(edges[1]).unwrap().endnode();
 
+    // both nodes are at level 0 (Highway)
+    assert_eq!(first_node.level(), 0);
+    assert_eq!(second_node.level(), 0);
+
     let auto = CostingModel::new(proto::costing::Type::Auto).unwrap();
-    assert_eq!(furthest_node_distance(&reader, &auto, first_node), 48626);
-    assert_eq!(furthest_node_distance(&reader, &auto, second_node), 45679);
+    assert_eq!(furthest_node_distance(&reader, &auto, first_node), 49079);
+    assert_eq!(furthest_node_distance(&reader, &auto, second_node), 46132);
 
     let bike = CostingModel::new(proto::costing::Type::Bicycle).unwrap();
     assert_eq!(furthest_node_distance(&reader, &bike, first_node), 0); // yep, somehow it is possible to reach tunnel entrance, but not go through it
-    assert_eq!(furthest_node_distance(&reader, &bike, second_node), 45679);
+    assert_eq!(furthest_node_distance(&reader, &bike, second_node), 46248); // a bit more than for cars
 
     let pedestrian = CostingModel::new(proto::costing::Type::Pedestrian).unwrap();
     assert_eq!(furthest_node_distance(&reader, &pedestrian, first_node), 0); // no luck for pedestrians either
