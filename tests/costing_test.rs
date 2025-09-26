@@ -1,7 +1,7 @@
 use pretty_assertions::assert_eq;
 use std::collections::{HashMap, VecDeque};
 
-use valhalla::{Config, CostingModel, GraphId, GraphReader, proto};
+use valhalla::{Config, CostingModel, GraphId, GraphReader, RoadClass, proto};
 
 const ANDORRA_TILES: &str = "tests/andorra/tiles.tar";
 
@@ -53,8 +53,8 @@ fn costing_model() {
 
                 for transition in &tile.transitions()[node.transitions()] {
                     let next_node_id = transition.endnode();
-                    if next_node_id.level() == 2 { // exploring all edges in the 2nd level takes too long
-                        continue;
+                    if next_node_id.level() == 2 {
+                        continue; // exploring all edges in the 2nd level takes too long
                     }
 
                     if node_labels
@@ -87,8 +87,13 @@ fn costing_model() {
 
     assert_eq!(edges.len(), 2);
     // these two nodes are at the ends of the tunnel
-    let first_node = tile.directededge(edges[0]).unwrap().endnode();
-    let second_node = tile.directededge(edges[1]).unwrap().endnode();
+    let first_edge = tile.directededge(edges[0]).unwrap();
+    assert_eq!(first_edge.road_class(), RoadClass::kTrunk);
+    let first_node = first_edge.endnode();
+
+    let second_edge = tile.directededge(edges[1]).unwrap();
+    assert_eq!(second_edge.road_class(), RoadClass::kTrunk);
+    let second_node = second_edge.endnode();
 
     // both nodes are at level 0 (Highway)
     assert_eq!(first_node.level(), 0);

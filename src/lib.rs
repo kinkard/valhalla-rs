@@ -20,6 +20,7 @@ pub use ffi::GraphId;
 pub use ffi::GraphLevel;
 pub use ffi::NodeInfo;
 pub use ffi::NodeTransition;
+pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
 
 #[cxx::bridge]
@@ -39,10 +40,11 @@ mod ffi {
         value: u64,
     }
 
-    // Edge use type. Indicates specialized uses.
+    /// Edge use type. Indicates specialized uses.
     #[namespace = "valhalla::baldr"]
     #[cxx_name = "Use"]
     #[repr(u8)]
+    #[derive(Debug)]
     enum EdgeUse {
         // Road specific uses
         kRoad = 0,
@@ -94,6 +96,25 @@ mod ffi {
         kEgressConnection = 52,   // Connection between transit station and transit egress
         kPlatformConnection = 53, // Connection between transit station and transit platform
         kTransitConnection = 54,  // Connection between road network and transit egress
+    }
+
+    /// [Road class] or importance of an edge.
+    ///
+    /// [Road class]: https://wiki.openstreetmap.org/wiki/Key:highway#Roads
+    #[namespace = "valhalla::baldr"]
+    #[repr(u8)]
+    #[derive(Debug, PartialOrd, Ord)]
+    enum RoadClass {
+        kMotorway = 0,
+        kTrunk = 1,
+        kPrimary = 2,
+        kSecondary = 3,
+        kTertiary = 4,
+        kUnclassified = 5,
+        kResidential = 6,
+        kServiceOther = 7,
+        /// [`DirectedEdge`] has only 3 bits for road class.
+        kInvalid = 8,
     }
 
     /// Directed edge within the graph.
@@ -232,6 +253,9 @@ mod ffi {
         type EdgeUse;
 
         #[namespace = "valhalla::baldr"]
+        type RoadClass;
+
+        #[namespace = "valhalla::baldr"]
         type DirectedEdge;
         /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if end node is in a different tile.
         fn endnode(self: &DirectedEdge) -> GraphId;
@@ -240,6 +264,9 @@ mod ffi {
         /// Specialized use type of the edge.
         #[cxx_name = "use"]
         fn use_type(self: &DirectedEdge) -> EdgeUse;
+        /// Road class or importance of the edge.
+        #[cxx_name = "classification"]
+        fn road_class(self: &DirectedEdge) -> RoadClass;
         /// Length of the edge in meters.
         fn length(self: &DirectedEdge) -> u32;
         /// Whether this edge is part of a toll road.
