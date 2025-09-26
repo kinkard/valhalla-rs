@@ -5,6 +5,8 @@
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/midgard/encoded.h>
 
+#include <boost/property_tree/ptree.hpp>
+
 namespace baldr = valhalla::baldr;
 namespace midgard = valhalla::midgard;
 
