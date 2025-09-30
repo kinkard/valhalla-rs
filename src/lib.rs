@@ -481,6 +481,9 @@ impl From<LatLon> for Option<proto::LatLng> {
 }
 
 /// High-level interface for reading Valhalla graph tiles from tar extracts.
+///
+/// As `GraphReader` already uses shared ownership internally, cloning is cheap and it can be
+/// reused across threads without wrapping it in an [`Arc`].
 #[derive(Clone)]
 pub struct GraphReader(cxx::SharedPtr<ffi::TileSet>);
 
@@ -528,8 +531,9 @@ impl GraphReader {
 
 /// Graph information for a tile within the Tiled Hierarchical Graph.
 ///
-/// `GraphTile` can outlive the [`GraphReader`] that created it. Cloning is cheap as it only
-/// copies an atomic shared pointer (C++'s version of [`std::sync::Arc`]) to the underlying tile data.
+/// `GraphTile` can outlive the [`GraphReader`] that created it.
+/// As `GraphTile` already uses shared ownership internally, cloning is cheap and it can be
+/// reused across threads without wrapping it in an [`Arc`].
 #[derive(Clone)]
 pub struct GraphTile(cxx::SharedPtr<ffi::GraphTile>);
 
@@ -759,6 +763,9 @@ impl TimeZoneInfo {
 /// are accessible for a given travel mode, and to calculate the cost of traversing edges and
 /// making turns at intersections. This enables graph traversal operations such as reachability
 /// analysis, accessibility checking, and custom routing logic.
+///
+/// As `CostingModel` already uses shared ownership internally, cloning is cheap and it can be
+/// reused across threads without wrapping it in an [`Arc`].
 ///
 /// [costing model]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-models
 #[derive(Clone)]
