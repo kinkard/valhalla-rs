@@ -484,6 +484,9 @@ impl From<LatLon> for Option<proto::LatLng> {
 ///
 /// As `GraphReader` already uses shared ownership internally, cloning is cheap and it can be
 /// reused across threads without wrapping it in an [`Arc`].
+///
+/// N.B.: It is better to clone `GraphReader` instances rather than creating new ones from the same
+/// configuration to avoid duplicate memory mappings (up to 80GB+ per instance for planetary tilesets).
 #[derive(Clone)]
 pub struct GraphReader(cxx::SharedPtr<ffi::TileSet>);
 
