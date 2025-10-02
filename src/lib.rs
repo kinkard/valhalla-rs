@@ -505,11 +505,6 @@ impl GraphReader {
         Ok(Self(ffi::new_tileset(config.inner())?))
     }
 
-    /// Graph tile object at given GraphId if it exists in the tileset.
-    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
-        GraphTile::new(self.0.get_tile(id))
-    }
-
     /// Latest OSM changeset ID (or the maximum OSM Node/Way/Relation ID) in the OSM PBF file used to build the tileset.
     pub fn dataset_id(&self) -> u64 {
         self.0.dataset_id()
@@ -518,6 +513,17 @@ impl GraphReader {
     /// List all tiles in the tileset.
     pub fn tiles(&self) -> Vec<GraphId> {
         self.0.tiles()
+    }
+
+    /// Graph tile object at given GraphId if it exists in the tileset.
+    pub fn tile(&self, id: GraphId) -> Option<GraphTile> {
+        GraphTile::new(self.0.get_tile(id))
+    }
+
+    /// Graph tile object at given GraphId if it exists in the tileset.
+    #[deprecated(since = "0.6.9", note = "please use `GraphReader::tile()` instead")]
+    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
+        self.tile(id)
     }
 
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.

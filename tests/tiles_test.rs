@@ -43,7 +43,7 @@ fn tile_can_outlive_reader() {
     let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
         .expect("Failed to create GraphReader");
 
-    let tile = reader.get_tile(reader.tiles()[0]).unwrap();
+    let tile = reader.tile(reader.tiles()[0]).unwrap();
     // just do something complicated with the tile
     let count = tile
         .directededges()
@@ -78,7 +78,7 @@ fn tiles_in_bbox() {
         .expect("Failed to create GraphReader");
 
     assert!(
-        reader.get_tile(GraphId::default()).is_none(),
+        reader.tile(GraphId::default()).is_none(),
         "Default tile should not exist"
     );
 
@@ -123,7 +123,7 @@ fn tiles_in_bbox() {
             assert_eq!(tile_id.id(), 0);
             assert_eq!(tile_id.tile(), tile_id);
 
-            let tile = reader.get_tile(tile_id);
+            let tile = reader.tile(tile_id);
             assert!(tile.is_some(), "Tile should exist for ID: {tile_id:?}");
             let tile = tile.unwrap();
             assert_eq!(tile.id(), tile_id, "Tile ID mismatch for {tile_id:?}");
@@ -143,7 +143,7 @@ fn edges_in_tile() {
         .expect("Failed to create GraphReader");
 
     for tile_id in reader.tiles() {
-        let tile = reader.get_tile(tile_id).unwrap();
+        let tile = reader.tile(tile_id).unwrap();
 
         let slice = tile.directededges();
         assert!(!slice.is_empty(), "Tile should always have directed edges");
@@ -182,7 +182,7 @@ fn edges_in_tile() {
             let endnode = de.endnode();
             assert_eq!(de.leaves_tile(), de.endnode().tile() != tile_id.tile());
             if de.leaves_tile() {
-                assert!(reader.get_tile(endnode.tile()).is_some());
+                assert!(reader.tile(endnode.tile()).is_some());
             }
         }
         assert!(tile.directededge(slice.len() as u32).is_none());
@@ -201,7 +201,7 @@ fn nodes_in_tile() {
         .expect("Failed to create GraphReader");
 
     for tile_id in reader.tiles() {
-        let tile = reader.get_tile(tile_id).unwrap();
+        let tile = reader.tile(tile_id).unwrap();
 
         let tile_edges = tile.directededges();
         let tile_transitions = tile.transitions();
@@ -240,7 +240,7 @@ fn transitions_in_tile() {
 
     let mut transition_count = 0;
     for tile_id in reader.tiles() {
-        let tile = reader.get_tile(tile_id).unwrap();
+        let tile = reader.tile(tile_id).unwrap();
 
         // Same check for transitions
         for (i, transition) in tile.transitions().iter().enumerate() {

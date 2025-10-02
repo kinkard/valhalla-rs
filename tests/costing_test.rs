@@ -15,7 +15,7 @@ fn costing_model() {
         .tiles()
         .into_iter()
         .find_map(|tile_id| {
-            let tile = reader.get_tile(tile_id).unwrap();
+            let tile = reader.tile(tile_id).unwrap();
             let toll_edges = tile
                 .directededges()
                 .iter()
@@ -32,7 +32,7 @@ fn costing_model() {
     let furthest_node_distance =
         |reader: &GraphReader, costing: &CostingModel, node_id: GraphId| {
             let mut tile_id = node_id.tile();
-            let mut tile = reader.get_tile(tile_id).unwrap();
+            let mut tile = reader.tile(tile_id).unwrap();
 
             // labels keep the shortest distance to each node we've found so far
             let mut node_labels = HashMap::new();
@@ -43,7 +43,7 @@ fn costing_model() {
             while let Some(node_id) = to_visit.pop_back() {
                 if node_id.tile() != tile_id {
                     tile_id = node_id.tile();
-                    tile = reader.get_tile(tile_id).unwrap();
+                    tile = reader.tile(tile_id).unwrap();
                 }
                 let node = tile.node(node_id.id()).unwrap();
                 if !costing.node_accessible(node) {
