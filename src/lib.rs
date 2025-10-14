@@ -258,8 +258,41 @@ mod ffi {
         #[namespace = "valhalla::baldr"]
         type DirectedEdge;
         /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if end node is in a different tile.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// # fn example(reader: &valhalla::GraphReader, tile: &valhalla::GraphTile, edge: &valhalla::DirectedEdge) -> Option<()> {
+        /// let end_node_id = edge.endnode();
+        /// // Alternatively, check that `end_node_id.tile()` is different from `tile.id()`.
+        /// let end_tile = if edge.leaves_tile() {
+        ///     reader.tile(end_node_id)?
+        /// } else {
+        ///     tile.clone()  // `clone()`
+        /// };
+        /// let end_node = end_tile.node(end_node_id.id())?;
+        /// # Some(())
+        /// # }
+        /// ```
         fn endnode(self: &DirectedEdge) -> GraphId;
         /// The index of the opposing directed edge at the end node of this directed edge.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// # fn example(reader: &valhalla::GraphReader, tile: &valhalla::GraphTile, edge: &valhalla::DirectedEdge) -> Option<()> {
+        /// let end_node_id = edge.endnode();
+        /// // Alternatively, check that `end_node_id.tile()` is different from `tile.id()`.
+        /// let end_tile = if edge.leaves_tile() {
+        ///     reader.tile(end_node_id)?
+        /// } else {
+        ///     tile.clone()  // `clone()`
+        /// };
+        /// let end_node = end_tile.node(end_node_id.id())?;
+        /// let opp_edge = &end_tile.directededges()[end_node.edges()][edge.opp_index() as usize];
+        /// # Some(())
+        /// # }
+        /// ```
         fn opp_index(self: &DirectedEdge) -> u32;
         /// Specialized use type of the edge.
         #[cxx_name = "use"]

@@ -228,6 +228,35 @@ fn nodes_in_tile() {
 }
 
 #[test]
+fn reverse_edge() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let tile_id = reader.tiles()[0];
+    let tile = reader.tile(tile_id).unwrap();
+
+    for (de_index, de) in tile.directededges().iter().enumerate() {
+        if de.leaves_tile() || de.is_shortcut() {
+            // just don't bother with such edges for this test
+            continue;
+        }
+
+        let end_node = tile.node(de.endnode().id()).unwrap();
+        let opp_de = &tile.directededges()[end_node.edges()][de.opp_index() as usize];
+        assert_eq!(tile.edgeinfo(de).way_id, tile.edgeinfo(opp_de).way_id);
+
+        let begin_node = tile.node(opp_de.endnode().id()).unwrap();
+        assert_eq!(de_index, (begin_node.edge_index() + opp_de.opp_index()) as usize);
+    }
+}
+
+#[test]
 fn transitions_in_tile() {
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
