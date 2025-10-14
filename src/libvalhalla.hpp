@@ -9,6 +9,7 @@ namespace valhalla::midgard {
 struct tar;
 }
 
+struct AdminInfo;
 struct DirectedEdgeSlice;
 struct EdgeInfo;
 struct NodeInfoSlice;
@@ -66,6 +67,9 @@ EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de
 
 /// Helper method that returns 0 if the edge is closed, 255 if live speed in unknown and speed in km/h otherwise
 uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
+
+/// Helper function to get admin info for a given index
+AdminInfo admininfo(const GraphTile& tile, uint32_t index);
 
 /// Helper function to resolve tz name and offset from a given id and unix timestamp.
 TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp);

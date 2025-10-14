@@ -157,6 +157,16 @@ uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& d
   return live_speed_data.get_overall_speed();
 }
 
+AdminInfo admininfo(const GraphTile& tile, uint32_t index) {
+  auto info = tile.admininfo(index);
+  return AdminInfo{
+    .country_iso = info.country_iso(),
+    .state_iso = info.state_iso(),
+    .country_text = info.country_text(),
+    .state_text = info.state_text(),
+  };
+}
+
 TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp) {
   const date::time_zone* tz = valhalla::baldr::DateTime::get_tz_db().from_index(id);
   if (!tz) {

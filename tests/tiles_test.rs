@@ -129,6 +129,24 @@ fn tiles_in_bbox() {
             assert_eq!(tile.id(), tile_id, "Tile ID mismatch for {tile_id:?}");
         }
     }
+
+    let tile = reader.tile(reader.tiles()[0]).unwrap();
+    // The first admin info is always empty (for ocean)
+    let admininfo = tile.admin_info(0).unwrap();
+    assert_eq!(admininfo.country_iso, "");
+    assert_eq!(admininfo.state_iso, "");
+    assert_eq!(admininfo.country_text, "None");
+    assert_eq!(admininfo.state_text, "None");
+
+    // The second admin info is Andorra
+    let admininfo = tile.admin_info(1).unwrap();
+    assert_eq!(admininfo.country_iso, "AD");
+    assert_eq!(admininfo.state_iso, "");
+    assert_eq!(admininfo.country_text, "Andorra");
+    assert_eq!(admininfo.state_text, "");
+
+    // There is no third admin info in this tileset
+    assert!(tile.admin_info(2).is_none());
 }
 
 #[test]
@@ -221,6 +239,8 @@ fn nodes_in_tile() {
             assert!(tile_edges.get(node.edges()).is_some());
             assert!(tile_transitions.get(node.transitions()).is_some());
 
+            assert_eq!(node.admin_index(), 1); // Andorra only, see [`tiles_in_bbox`] test
+
             // Europe/Andorra or Europe/Madrid or Europe/Paris timezones
             assert!(matches!(node.timezone(), 293 | 313 | 319));
         }
@@ -252,7 +272,10 @@ fn reverse_edge() {
         assert_eq!(tile.edgeinfo(de).way_id, tile.edgeinfo(opp_de).way_id);
 
         let begin_node = tile.node(opp_de.endnode().id()).unwrap();
-        assert_eq!(de_index, (begin_node.edge_index() + opp_de.opp_index()) as usize);
+        assert_eq!(
+            de_index,
+            (begin_node.edge_index() + opp_de.opp_index()) as usize
+        );
     }
 }
 

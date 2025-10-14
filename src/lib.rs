@@ -181,6 +181,15 @@ mod ffi {
         len: usize,
     }
 
+    /// Information about the administrative area, such as country or state.
+    #[derive(Clone)]
+    struct AdminInfo {
+        country_text: String,
+        state_text: String,
+        country_iso: String,
+        state_iso: String,
+    }
+
     /// Information about the timezone, such as name and offset from UTC.
     #[derive(Clone)]
     struct TimeZoneInfo {
@@ -235,6 +244,7 @@ mod ffi {
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
         fn transitions(tile: &GraphTile) -> NodeTransitionSlice;
         fn transition(self: &GraphTile, index: u32) -> Result<*const NodeTransition>;
+        fn admininfo(tile: &GraphTile, index: u32) -> Result<AdminInfo>;
         unsafe fn IsClosed(self: &GraphTile, de: *const DirectedEdge) -> bool;
         unsafe fn GetSpeed(
             self: &GraphTile,
@@ -340,6 +350,9 @@ mod ffi {
         fn edge_count(self: &NodeInfo) -> u32;
         /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
         fn access(self: &NodeInfo) -> u16;
+        /// Index of the administrative area (country) the node is in. Corresponding [`crate::AdminInfo`] can be
+        /// retrieved using [`crate::GraphTile::admin_info()`].
+        fn admin_index(self: &NodeInfo) -> u32;
         /// Time zone index of the node. Corresponding [`crate::TimeZoneInfo`] can be retrieved
         /// using [`crate::TimeZoneInfo::from_id()`].
         fn timezone(self: &NodeInfo) -> u32;
@@ -666,6 +679,12 @@ impl GraphTile {
             // But it also sounds nice to handle nullptr in the same way.
             _ => None,
         }
+    }
+
+    /// Information about the administrative area, such as country or state, by its index.
+    /// Indices are stored in [`NodeInfo::admin_index()`] fields.
+    pub fn admin_info(&self, index: u32) -> Option<ffi::AdminInfo> {
+        ffi::admininfo(&self.0, index).ok()
     }
 
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
