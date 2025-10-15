@@ -221,9 +221,6 @@ fn nodes_in_tile() {
     for tile_id in reader.tiles() {
         let tile = reader.tile(tile_id).unwrap();
 
-        let tile_edges = tile.directededges();
-        let tile_transitions = tile.transitions();
-
         // Same check for nodes
         let slice = tile.nodes();
         assert!(!slice.is_empty(), "Tile should always have nodes");
@@ -236,8 +233,9 @@ fn nodes_in_tile() {
                 "node and via_ptr should have the same address"
             );
 
-            assert!(tile_edges.get(node.edges()).is_some());
-            assert!(tile_transitions.get(node.transitions()).is_some());
+            // Check no panic
+            let _ = tile.node_edges(node);
+            let _ = tile.node_transitions(node);
 
             assert_eq!(node.admin_index(), 1); // Andorra only, see [`tiles_in_bbox`] test
 
@@ -268,7 +266,7 @@ fn reverse_edge() {
         }
 
         let end_node = tile.node(de.endnode().id()).unwrap();
-        let opp_de = &tile.directededges()[end_node.edges()][de.opp_index() as usize];
+        let opp_de = &tile.node_edges(end_node)[de.opp_index() as usize];
         assert_eq!(tile.edgeinfo(de).way_id, tile.edgeinfo(opp_de).way_id);
 
         let begin_node = tile.node(opp_de.endnode().id()).unwrap();
@@ -345,4 +343,49 @@ fn tz_info() {
     let tz = TimeZoneInfo::from_id(94, unix_timestamp).unwrap();
     assert_eq!(tz.name, "America/Los_Angeles");
     assert_eq!(tz.offset_seconds, -28800); // UTC-8
+}
+
+#[test]
+#[should_panic = "Wrong tile"]
+fn wrong_tile_edgeinfo() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let tiles = reader.tiles();
+    assert!(tiles.len() >= 2, "This test requires at least two tiles");
+    let t1 = reader.tile(tiles[0]).unwrap();
+    let t2 = reader.tile(tiles[1]).unwrap();
+
+    let de = t2.directededge(0).unwrap();
+    let _ = t1.edgeinfo(de); // should panic
+}
+
+#[test]
+#[should_panic = "Wrong tile"]
+fn wrong_tile_node_edges() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let tiles = reader.tiles();
+    assert!(tiles.len() >= 2, "This test requires at least two tiles");
+    let t1 = reader.tile(tiles[0]).unwrap();
+    let t2 = reader.tile(tiles[1]).unwrap();
+
+    let node = t2.node(0).unwrap();
+    let _ = t1.node_edges(node); // should panic
+}
+
+#[test]
+#[should_panic = "Wrong tile"]
+fn wrong_tile_node_transitions() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let tiles = reader.tiles();
+    assert!(tiles.len() >= 2, "This test requires at least two tiles");
+    let t1 = reader.tile(tiles[0]).unwrap();
+    let t2 = reader.tile(tiles[1]).unwrap();
+
+    let node = t2.node(0).unwrap();
+    let _ = t1.node_transitions(node); // should panic
 }

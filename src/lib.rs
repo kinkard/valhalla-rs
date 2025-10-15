@@ -303,7 +303,7 @@ mod ffi {
         ///     tile.clone()  // `clone()`
         /// };
         /// let end_node = end_tile.node(end_node_id.id())?;
-        /// let opp_edge = &end_tile.directededges()[end_node.edges()][edge.opp_index() as usize];
+        /// let opp_edge = &end_tile.node_edges(end_node)[edge.opp_index() as usize];
         /// # Some(())
         /// # }
         /// ```
@@ -685,6 +685,24 @@ impl GraphTile {
         }
     }
 
+    /// Slice of all outbound edges for the given node.
+    pub fn node_edges(&self, node: &ffi::NodeInfo) -> &[ffi::DirectedEdge] {
+        debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
+        #[allow(deprecated)] // we'll keep it as a private method after deprecation
+        &self.directededges()[node.edges()]
+    }
+
+    /// Slice of all transitions to other hierarchy levels for the given node.
+    pub fn node_transitions(&self, node: &ffi::NodeInfo) -> &[ffi::NodeTransition] {
+        debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
+        #[allow(deprecated)] // we'll keep it as a private method after deprecation
+        let range = node.transitions();
+        if range.is_empty() {
+            return &[]; // most of the nodes have no transitions
+        }
+        &self.transitions()[range]
+    }
+
     /// Information about the administrative area, such as country or state, by its index.
     /// Indices are stored in [`NodeInfo::admin_index()`] fields.
     pub fn admin_info(&self, index: u32) -> Option<ffi::AdminInfo> {
@@ -693,11 +711,13 @@ impl GraphTile {
 
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
     pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
+        debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         ffi::edgeinfo(&self.0, de)
     }
 
     /// Edge's live traffic speed in km/h if available. Returns `Some(0)` if the edge is closed due to traffic.
     pub fn live_speed(&self, de: &ffi::DirectedEdge) -> Option<u32> {
+        debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         match ffi::live_speed(&self.0, de) {
             0 => Some(0), // Edge is closed due to traffic
             255 => None,  // Live speed is unknown
@@ -711,6 +731,7 @@ impl GraphTile {
     ///   b) we have a valid record for that edge
     ///   b) the speed is zero
     pub fn edge_closed(&self, de: &ffi::DirectedEdge) -> bool {
+        debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         unsafe { self.0.IsClosed(de as *const ffi::DirectedEdge) }
     }
 
@@ -727,6 +748,7 @@ impl GraphTile {
         second_of_week: u64,
         seconds_from_now: u64,
     ) -> (u32, SpeedSources) {
+        debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         let mut flow_sources: u8 = 0;
         let speed = unsafe {
             self.0.GetSpeed(
@@ -770,7 +792,7 @@ impl NodeInfo {
     /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
     ///
     /// // Get the tile containing the node
-    /// let tile = reader.get_tile(node_id.tile())?;
+    /// let tile = reader.tile(node_id.tile())?;
     /// let node = tile.node(node_id.id())?;
     ///
     /// for edge in &tile.directededges()[node.edges()] {
@@ -779,6 +801,10 @@ impl NodeInfo {
     /// # Some(())
     /// # }
     /// ```
+    #[deprecated(
+        since = "0.6.10",
+        note = "please use `GraphTile::node_edges()` instead"
+    )]
     pub fn edges(&self) -> std::ops::Range<usize> {
         let start = self.edge_index() as usize;
         let count = self.edge_count() as usize;
@@ -798,7 +824,7 @@ impl NodeInfo {
     /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
     ///
     /// // Get the tile containing the node
-    /// let tile = reader.get_tile(node_id.tile())?;
+    /// let tile = reader.tile(node_id.tile())?;
     /// let node = tile.node(node_id.id())?;
     ///
     /// for transition in &tile.transitions()[node.transitions()] {
@@ -807,6 +833,10 @@ impl NodeInfo {
     /// # Some(())
     /// # }
     /// ```
+    #[deprecated(
+        since = "0.6.10",
+        note = "please use `GraphTile::node_transitions()` instead"
+    )]
     pub fn transitions(&self) -> std::ops::Range<usize> {
         let start = self.transition_index() as usize;
         let count = self.transition_count() as usize;
@@ -899,6 +929,14 @@ impl CostingModel {
     }
 }
 
+/// Checks if the given reference points to an item within the given slice.
+fn ref_within_slice<T>(slice: &[T], item: &T) -> bool {
+    let start = slice.as_ptr() as usize;
+    let item_pos = item as *const T as usize;
+    let byte_offset = item_pos.wrapping_sub(start);
+    byte_offset < std::mem::size_of_val(slice)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -931,5 +969,23 @@ mod tests {
         assert_eq!(default_id.id(), 2097151);
 
         assert_eq!(GraphId::from_parts(8, id.tileid(), 0), None);
+    }
+
+    #[test]
+    fn test_ref_within_slice() {
+        let data = [10, 20, 30, 40, 50];
+        assert!(ref_within_slice(&data, &data[0]));
+        assert!(ref_within_slice(&data, &data[2]));
+        assert!(ref_within_slice(&data, &data[4]));
+
+        let outside = 30;
+        assert!(!ref_within_slice(&data, &outside));
+
+        let subslice = &data[1..4];
+        assert!(!ref_within_slice(subslice, &data[0]));
+        assert!(ref_within_slice(subslice, &data[1]));
+        assert!(ref_within_slice(subslice, &data[2]));
+        assert!(ref_within_slice(subslice, &data[3]));
+        assert!(!ref_within_slice(subslice, &data[4]));
     }
 }

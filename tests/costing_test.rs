@@ -51,7 +51,7 @@ fn costing_model() {
                 }
                 let curr_length = *node_labels.get(&node_id).unwrap();
 
-                for transition in &tile.transitions()[node.transitions()] {
+                for transition in tile.node_transitions(node) {
                     let next_node_id = transition.endnode();
                     if next_node_id.level() == 2 {
                         continue; // exploring all edges in the 2nd level takes too long
@@ -66,7 +66,7 @@ fn costing_model() {
                     }
                 }
 
-                for de in &tile.directededges()[node.edges()] {
+                for de in tile.node_edges(node) {
                     if !costing.edge_accessible(de) {
                         continue;
                     }
