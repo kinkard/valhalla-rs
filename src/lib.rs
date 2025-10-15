@@ -184,9 +184,13 @@ mod ffi {
     /// Information about the administrative area, such as country or state.
     #[derive(Clone)]
     struct AdminInfo {
+        /// Text name of the country or "None" if not available.
         country_text: String,
+        /// Text name of the state or "None" if not available. May be empty if country has no states.
         state_text: String,
+        /// ISO 3166-1 alpha-2 country code.
         country_iso: String,
+        /// ISO 3166-2 subdivision code (state/province part only), e.g. 'CA' for 'US-CA'.
         state_iso: String,
     }
 
