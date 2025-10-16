@@ -22,6 +22,7 @@ pub use ffi::NodeInfo;
 pub use ffi::NodeTransition;
 pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
+pub use ffi::TrafficTile;
 
 #[cxx::bridge]
 mod ffi {
@@ -202,6 +203,24 @@ mod ffi {
         /// Offset in seconds from UTC for the timezone.
         offset_seconds: i32,
     }
+    
+    /// Real-time traffic data for a single edge, including speeds, congestion levels, and incidents.
+    struct LiveTraffic {
+        data: u64,
+    }
+
+    /// An interface for writing live traffic information for the corresponding graph tile.
+    ///
+    /// Can be obtained via [`crate::GraphReader::traffic_tile()`].
+    /// `TrafficTile` can outlive the [`GraphReader`] that created it.
+    struct TrafficTile {
+        /// Pointer to `valhalla::baldr::TrafficTileHeader` of the tile.
+        header: *const u8,
+        /// Pointer to the start of the array of `valhalla::baldr::TrafficSpeed` records for the tile.
+        speeds: *const u8,
+        /// Shared ownership of the underlying memory-mapped file.
+        traffic_tar: SharedPtr<tar>,
+    }
 
     unsafe extern "C++" {
         include!("valhalla/src/libvalhalla.hpp");
@@ -237,6 +256,7 @@ mod ffi {
             level: GraphLevel,
         ) -> Vec<GraphId>;
         fn get_tile(self: &TileSet, id: GraphId) -> SharedPtr<GraphTile>;
+        fn get_traffic_tile(self: &TileSet, id: GraphId) -> Result<TrafficTile>;
         fn dataset_id(self: &TileSet) -> u64;
 
         type GraphTile;
@@ -261,6 +281,31 @@ mod ffi {
         ) -> u32;
         // Helper method that returns 0 if the edge is closed, 255 if live speed in unknown and speed in km/h otherwise.
         fn live_speed(tile: &GraphTile, de: &DirectedEdge) -> u8;
+
+        #[namespace = "valhalla::midgard"]
+        type tar;
+
+        type TrafficTile;
+        /// GraphID of the tile, which includes the tile ID and hierarchy level.
+        fn id(self: &TrafficTile) -> GraphId;
+        /// Seconds since epoch of the last update.
+        fn last_update(self: &TrafficTile) -> u64;
+        /// Custom spare value stored in the header.
+        fn spare(self: &TrafficTile) -> u64;
+        /// Number of directed edges in this traffic tile.
+        fn edge_count(self: &TrafficTile) -> u32;
+
+        /// Writes the last update timestamp to the memory-mapped file.
+        fn write_last_update(self: &TrafficTile, unix_timestamp: u64);
+        /// Writes a custom value to the spare field in the memory-mapped file.
+        fn write_spare(self: &TrafficTile, spare: u64);
+        
+        
+        
+        
+        /// Clears live traffic information in the tile and sets the last update time to 0.
+        /// The spare field is left unchanged.
+        fn clear_traffic(self: &TrafficTile);
 
         #[namespace = "valhalla::baldr"]
         #[cxx_name = "Use"]
@@ -565,17 +610,6 @@ impl GraphReader {
         self.0.tiles()
     }
 
-    /// Graph tile object at given GraphId if it exists in the tileset.
-    pub fn tile(&self, id: GraphId) -> Option<GraphTile> {
-        GraphTile::new(self.0.get_tile(id))
-    }
-
-    /// Graph tile object at given GraphId if it exists in the tileset.
-    #[deprecated(since = "0.6.9", note = "please use `GraphReader::tile()` instead")]
-    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
-        self.tile(id)
-    }
-
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.
     pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<GraphId> {
         self.0.tiles_in_bbox(
@@ -585,6 +619,22 @@ impl GraphReader {
             max.1 as f32,
             level,
         )
+    }
+
+    /// Graph tile object at given GraphId if it exists in the tileset.
+    #[deprecated(since = "0.6.9", note = "please use `GraphReader::tile()` instead")]
+    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
+        self.tile(id)
+    }
+
+    /// Graph tile object at given GraphId if it exists in the tileset.
+    pub fn tile(&self, id: GraphId) -> Option<GraphTile> {
+        GraphTile::new(self.0.get_tile(id))
+    }
+
+    /// Live traffic data for the tile at given GraphId if it exists in the tileset.
+    pub fn traffic_tile(&self, id: GraphId) -> Option<ffi::TrafficTile> {
+        self.0.get_traffic_tile(id).ok()
     }
 }
 

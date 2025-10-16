@@ -81,6 +81,10 @@ fn tiles_in_bbox() {
         reader.tile(GraphId::default()).is_none(),
         "Default tile should not exist"
     );
+    assert!(
+        reader.traffic_tile(GraphId::default()).is_none(),
+        "Default traffic tile should not exist"
+    );
 
     let mut all_tiles = reader.tiles();
     all_tiles.sort_by_key(|id| id.value); // order is not guaranteed, sort for comparison
@@ -127,6 +131,33 @@ fn tiles_in_bbox() {
             assert!(tile.is_some(), "Tile should exist for ID: {tile_id:?}");
             let tile = tile.unwrap();
             assert_eq!(tile.id(), tile_id, "Tile ID mismatch for {tile_id:?}");
+
+            let traffic_tile = reader.traffic_tile(tile_id);
+            assert!(
+                traffic_tile.is_some(),
+                "Traffic tile should exist for ID: {tile_id:?}"
+            );
+            let traffic_tile = traffic_tile.unwrap();
+            assert_eq!(
+                traffic_tile.id(),
+                tile_id,
+                "Traffic tile ID mismatch for {tile_id:?}"
+            );
+            assert_eq!(
+                traffic_tile.edge_count() as usize,
+                tile.directededges().len(),
+                "Mismatch in edge count for {tile_id:?}"
+            );
+
+            assert_eq!(traffic_tile.last_update(), 0); // initial state
+            traffic_tile.write_last_update(101);
+            assert_eq!(traffic_tile.last_update(), 101);
+            traffic_tile.write_spare(999);
+            assert_eq!(traffic_tile.spare(), 999);
+            traffic_tile.clear_traffic(); // it's important to reset it back for other tests
+            assert_eq!(traffic_tile.last_update(), 0);
+            assert_eq!(traffic_tile.spare(), 999); // spare is not cleared
+            traffic_tile.write_spare(0); // reset spare too
         }
     }
 

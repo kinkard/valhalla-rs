@@ -2,6 +2,7 @@
 
 #include <valhalla/baldr/graphtile.h>
 #include <boost/property_tree/ptree_fwd.hpp>
+#include <cstdint>
 
 #include "cxx.h"
 
@@ -15,6 +16,7 @@ struct EdgeInfo;
 struct NodeInfoSlice;
 struct NodeTransitionSlice;
 struct TimeZoneInfo;
+struct TrafficTile;
 
 enum class GraphLevel : uint8_t {
   Highway = 0,
@@ -38,6 +40,7 @@ struct TileSet {
   rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
                                                     GraphLevel level) const;
   valhalla::baldr::graph_tile_ptr get_tile(valhalla::baldr::GraphId id) const;
+  TrafficTile get_traffic_tile(valhalla::baldr::GraphId id) const;
   uint64_t dataset_id() const;
 };
 
@@ -73,3 +76,47 @@ AdminInfo admininfo(const GraphTile& tile, uint32_t index);
 
 /// Helper function to resolve tz name and offset from a given id and unix timestamp.
 TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp);
+
+struct TrafficTile {
+  volatile valhalla::baldr::TrafficTileHeader* header;
+  volatile valhalla::baldr::TrafficSpeed* speeds;
+  std::shared_ptr<valhalla::midgard::tar> traffic_tar;
+
+  TrafficTile(std::shared_ptr<valhalla::midgard::tar> tar, std::pair<char*, size_t> position) : traffic_tar(tar) {
+    using namespace valhalla::baldr;
+
+    header = reinterpret_cast<volatile TrafficTileHeader*>(position.first);
+    speeds = reinterpret_cast<volatile TrafficSpeed*>(position.first + sizeof(TrafficTileHeader));
+
+    if (header->traffic_tile_version != TRAFFIC_TILE_VERSION) {
+      throw std::runtime_error("Unsupported TrafficTile version");
+    }
+    if (sizeof(TrafficTileHeader) + header->directed_edge_count * sizeof(TrafficSpeed) != position.second) {
+      throw std::runtime_error("TrafficTile data size does not match header count");
+    }
+  }
+
+  valhalla::baldr::GraphId id() const { return valhalla::baldr::GraphId(header->tile_id); }
+
+  uint64_t last_update() const { return header->last_update; }
+  void write_last_update(uint64_t t) const { header->last_update = t; }
+
+  uint64_t spare() const { return (static_cast<uint64_t>(header->spare2) << 32) | header->spare3; }
+  void write_spare(uint64_t s) const {
+    header->spare2 = static_cast<uint32_t>(s >> 32);
+    header->spare3 = static_cast<uint32_t>(s & 0xFFFFFFFF);
+  }
+
+  uint32_t edge_count() const { return header->directed_edge_count; }
+
+  void clear_traffic() const {
+    // `speeds[i] = TrafficSpeed{}` doesn't work on volatile, write it as uint64_t instead
+    static_assert(sizeof(valhalla::baldr::TrafficSpeed) == sizeof(uint64_t), "Bad TrafficSpeed size");
+    volatile uint64_t* const ptr = reinterpret_cast<volatile uint64_t*>(speeds);
+    const uint32_t count = header->directed_edge_count;
+    for (uint32_t i = 0; i < count; ++i) {
+      ptr[i] = 0;
+    }
+    header->last_update = 0;
+  }
+};
