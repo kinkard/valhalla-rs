@@ -13,6 +13,7 @@ pub mod proto;
 pub use actor::Actor;
 pub use actor::Response;
 pub use config::Config;
+pub use ffi::AdminInfo;
 pub use ffi::DirectedEdge;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
