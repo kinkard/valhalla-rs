@@ -9,11 +9,11 @@ C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) Routin
 Features:
 
 - [x] **Tile access**: Read Valhalla tiles and access road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`) - see [tiles_tests](tests/tiles_test.rs) for examples
+- [x] **Live traffic**: Write live traffic information directly to memory-mapped traffic.tar - see [tiles_tests](tests/tiles_test.rs) for examples
 - [x] **Actor API**: Route building and routing operations similar to [Valhalla's Python bindings](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb) - see [actor_tests](tests/actor_test.rs) for examples
 
 TODOs:
 
-- [ ] **Live traffic**: Write live traffic information directly to memory-mapped traffic.tar, as well as utilities for sharing live traffic data between Valhalla instances.
 - [ ] **Logging**: Redirect Valhalla logging to Rust's `tracing` crate or provide an interface for redirecting it to a custom logger.
 - [ ] **Reading individual tile files**: Support reading info from Valhalla tiles from `tile_dir` (individual file per tile). Currently only `tile_extract` (single tiles.tar file) is supported.
 - [ ] **Historical traffic**: All minor functionality for out-of-the-box historical traffic support. Currently minor stuff should be done manually, such as converting `GraphId` to the tile file name or writing historical speeds (free flow, congested, 5m bins) to the csv files.

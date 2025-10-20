@@ -23,6 +23,7 @@ pub use ffi::NodeInfo;
 pub use ffi::NodeTransition;
 pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
+pub use ffi::TrafficTile;
 
 #[cxx::bridge]
 mod ffi {
@@ -204,6 +205,19 @@ mod ffi {
         offset_seconds: i32,
     }
 
+    /// An interface for writing live traffic information for the corresponding graph tile.
+    ///
+    /// Can be obtained via [`crate::GraphReader::traffic_tile()`].
+    /// `TrafficTile` can outlive the [`GraphReader`] that created it.
+    struct TrafficTile {
+        /// Pointer to `valhalla::baldr::TrafficTileHeader` of the tile.
+        header: *const u64,
+        /// Pointer to the start of the array of `valhalla::baldr::TrafficSpeed` records for the tile.
+        speeds: *const u64,
+        /// Shared ownership of the underlying memory-mapped file.
+        traffic_tar: SharedPtr<tar>,
+    }
+
     unsafe extern "C++" {
         include!("valhalla/src/libvalhalla.hpp");
 
@@ -237,7 +251,8 @@ mod ffi {
             max_lon: f32,
             level: GraphLevel,
         ) -> Vec<GraphId>;
-        fn get_tile(self: &TileSet, id: GraphId) -> SharedPtr<GraphTile>;
+        fn get_graph_tile(self: &TileSet, id: GraphId) -> SharedPtr<GraphTile>;
+        fn get_traffic_tile(self: &TileSet, id: GraphId) -> Result<TrafficTile>;
         fn dataset_id(self: &TileSet) -> u64;
 
         type GraphTile;
@@ -263,6 +278,30 @@ mod ffi {
         // Helper method that returns 0 if the edge is closed, 255 if live speed in unknown and speed in km/h otherwise.
         fn live_speed(tile: &GraphTile, de: &DirectedEdge) -> u8;
 
+        #[namespace = "valhalla::midgard"]
+        type tar;
+
+        type TrafficTile;
+        /// GraphID of the tile, which includes the tile ID and hierarchy level.
+        fn id(self: &TrafficTile) -> GraphId;
+        /// Seconds since epoch of the last update.
+        fn last_update(self: &TrafficTile) -> u64;
+        /// Custom spare value stored in the header.
+        fn spare(self: &TrafficTile) -> u64;
+        /// Number of directed edges in this traffic tile.
+        fn edge_count(self: &TrafficTile) -> u32;
+        /// Live traffic information for the given edge index in the tile.
+        fn edge_traffic(tile: &TrafficTile, edge_index: u32) -> Result<u64>;
+        /// Writes the last update timestamp to the memory-mapped file.
+        fn write_last_update(self: &TrafficTile, unix_timestamp: u64);
+        /// Writes a custom value to the spare field in the memory-mapped file.
+        fn write_spare(self: &TrafficTile, spare: u64);
+        /// Writes live traffic information for the given edge index in the tile.
+        fn write_edge_traffic(tile: &TrafficTile, edge_index: u32, traffic: u64) -> Result<()>;
+        /// Clears live traffic information in the tile and sets the last update time to 0.
+        /// The spare field is left unchanged.
+        fn clear_traffic(self: &TrafficTile);
+
         #[namespace = "valhalla::baldr"]
         #[cxx_name = "Use"]
         type EdgeUse;
@@ -281,7 +320,7 @@ mod ffi {
         /// let end_node_id = edge.endnode();
         /// // Alternatively, check that `end_node_id.tile()` is different from `tile.id()`.
         /// let end_tile = if edge.leaves_tile() {
-        ///     reader.tile(end_node_id)?
+        ///     reader.graph_tile(end_node_id)?
         /// } else {
         ///     tile.clone()  // `clone()`
         /// };
@@ -299,7 +338,7 @@ mod ffi {
         /// let end_node_id = edge.endnode();
         /// // Alternatively, check that `end_node_id.tile()` is different from `tile.id()`.
         /// let end_tile = if edge.leaves_tile() {
-        ///     reader.tile(end_node_id)?
+        ///     reader.graph_tile(end_node_id)?
         /// } else {
         ///     tile.clone()  // `clone()`
         /// };
@@ -566,17 +605,6 @@ impl GraphReader {
         self.0.tiles()
     }
 
-    /// Graph tile object at given GraphId if it exists in the tileset.
-    pub fn tile(&self, id: GraphId) -> Option<GraphTile> {
-        GraphTile::new(self.0.get_tile(id))
-    }
-
-    /// Graph tile object at given GraphId if it exists in the tileset.
-    #[deprecated(since = "0.6.9", note = "please use `GraphReader::tile()` instead")]
-    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
-        self.tile(id)
-    }
-
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.
     pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<GraphId> {
         self.0.tiles_in_bbox(
@@ -586,6 +614,28 @@ impl GraphReader {
             max.1 as f32,
             level,
         )
+    }
+
+    /// Graph tile object at given GraphId if it exists in the tileset.
+    #[deprecated(since = "0.6.9", note = "use `GraphReader::graph_tile()` instead")]
+    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
+        self.graph_tile(id)
+    }
+
+    /// Graph tile object at given GraphId if it exists in the tileset.
+    #[deprecated(since = "0.6.11", note = "use `GraphReader::graph_tile()` instead")]
+    pub fn tile(&self, id: GraphId) -> Option<GraphTile> {
+        self.graph_tile(id)
+    }
+
+    /// Retrieves the graph tile data for a given [`GraphId`] if it exists in the tileset.
+    pub fn graph_tile(&self, id: GraphId) -> Option<GraphTile> {
+        GraphTile::new(self.0.get_graph_tile(id))
+    }
+
+    /// Retrieves the live traffic tile data for a given [`GraphId`] if it exists in the tileset.
+    pub fn traffic_tile(&self, id: GraphId) -> Option<ffi::TrafficTile> {
+        self.0.get_traffic_tile(id).ok()
     }
 }
 
@@ -793,7 +843,7 @@ impl NodeInfo {
     /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
     ///
     /// // Get the tile containing the node
-    /// let tile = reader.tile(node_id.tile())?;
+    /// let tile = reader.graph_tile(node_id.tile())?;
     /// let node = tile.node(node_id.id())?;
     ///
     /// for edge in &tile.directededges()[node.edges()] {
@@ -825,7 +875,7 @@ impl NodeInfo {
     /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
     ///
     /// // Get the tile containing the node
-    /// let tile = reader.tile(node_id.tile())?;
+    /// let tile = reader.graph_tile(node_id.tile())?;
     /// let node = tile.node(node_id.id())?;
     ///
     /// for transition in &tile.transitions()[node.transitions()] {
@@ -849,6 +899,84 @@ impl TimeZoneInfo {
     /// Retrieves the timezone information by its index if available. `unix_timestamp` is required to handle DST.
     pub fn from_id(id: u32, unix_timestamp: u64) -> Option<Self> {
         ffi::from_id(id, unix_timestamp).ok()
+    }
+}
+
+/// Real-time traffic data for a single edge, including speeds, congestion levels, and incidents.
+/// It is a Rust representation of `valhalla::baldr::TrafficSpeed`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LiveTraffic(u64);
+
+impl LiveTraffic {
+    /// Live traffic data is unknown for the edge.
+    pub const UNKNOWN: Self = Self(0);
+    /// Edge is closed due to incident.
+    pub const CLOSED: Self = Self(255u64 << 28); // set breakpoint1 to 255, keeping overall_encoded_speed at 0
+
+    /// Constructs a `LiveTraffic` instance from its raw `u64` bit representation.
+    /// The bit layout of the `u64` value must match the format of the
+    /// [`valhalla::baldr::TrafficSpeed`] struct in the C++ Valhalla library.
+    ///
+    /// [`valhalla::baldr::TrafficSpeed`]: https://github.com/valhalla/valhalla/blob/master/valhalla/baldr/traffictile.h
+    #[inline(always)]
+    pub const fn from_bits(value: u64) -> Self {
+        Self(value)
+    }
+
+    /// Returns the raw `u64` bit representation of the traffic data.
+    /// The bit layout of the returned value is defined by the
+    /// [`valhalla::baldr::TrafficSpeed`] struct in the C++ Valhalla library.
+    ///
+    /// [`valhalla::baldr::TrafficSpeed`]: https://github.com/valhalla/valhalla/blob/master/valhalla/baldr/traffictile.h
+    #[inline(always)]
+    pub const fn to_bits(&self) -> u64 {
+        self.0
+    }
+
+    /// Creates traffic data from a single, uniform speed for the entire edge.
+    /// Underlying segmented speeds are set to `[speed, 0, 0]` with breakpoints as `[255, 0]`.
+    #[inline(always)]
+    pub const fn from_uniform_speed(speed: u8) -> Self {
+        Self::from_segmented_speeds(speed, [speed, 0, 0], [255, 0])
+    }
+
+    /// Creates traffic data from multiple speed values for different segments of the edge.
+    #[inline(always)]
+    pub const fn from_segmented_speeds(
+        overall_speed: u8,
+        subsegment_speeds: [u8; 3],
+        breakpoints: [u8; 2],
+    ) -> Self {
+        let overall_encoded = (overall_speed >> 1) as u64;
+        let speed1_encoded = (subsegment_speeds[0] >> 1) as u64;
+        let speed2_encoded = (subsegment_speeds[1] >> 1) as u64;
+        let speed3_encoded = (subsegment_speeds[2] >> 1) as u64;
+        let bp1 = breakpoints[0] as u64;
+        let bp2 = breakpoints[1] as u64;
+
+        Self(
+            overall_encoded |        // overall_encoded_speed at bit 0
+            (speed1_encoded << 7) |  // encoded_speed1 at bit 7
+            (speed2_encoded << 14) | // encoded_speed2 at bit 14
+            (speed3_encoded << 21) | // encoded_speed3 at bit 21
+            (bp1 << 28) |            // breakpoint1 at bit 28
+            (bp2 << 36), // breakpoint2 at bit 36
+        )
+    }
+}
+
+impl TrafficTile {
+    /// Live traffic information for the given edge index in the tile if available.
+    pub fn edge_traffic(&self, edge_index: u32) -> Option<LiveTraffic> {
+        match ffi::edge_traffic(self, edge_index) {
+            Ok(data) => Some(LiveTraffic(data)),
+            Err(_) => None,
+        }
+    }
+
+    /// Writes live traffic information for the given edge index in the tile.
+    pub fn write_edge_traffic(&self, edge_index: u32, traffic: LiveTraffic) {
+        let _ = ffi::write_edge_traffic(self, edge_index, traffic.0);
     }
 }
 

@@ -29,7 +29,7 @@ std::shared_ptr<TileSet> new_tileset(const boost::property_tree::ptree& pt) {
   // Hack to expose protected `baldr::GraphReader::tile_extract_t`
   struct TileSetReader : public baldr::GraphReader {
     static TileSet create(const boost::property_tree::ptree& pt) {
-      auto extract = baldr::GraphReader::tile_extract_t(pt);
+      auto extract = baldr::GraphReader::tile_extract_t(pt, false);
       return TileSet{
         .tiles_ = std::move(extract.tiles),
         .traffic_tiles_ = std::move(extract.traffic_tiles),
@@ -73,7 +73,7 @@ rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, f
 }
 
 /// Part of the [`baldr::GraphReader::GetGraphTile()`] that gets tile from mmap file
-baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
+baldr::graph_tile_ptr TileSet::get_graph_tile(baldr::GraphId id) const {
   auto base = id.Tile_Base();
 
   auto tile_it = tiles_.find(base);
@@ -90,9 +90,18 @@ baldr::graph_tile_ptr TileSet::get_tile(baldr::GraphId id) const {
   return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tar_, tile_it->second), std::move(traffic));
 }
 
+TrafficTile TileSet::get_traffic_tile(valhalla::baldr::GraphId id) const {
+  auto base = id.Tile_Base();
+  auto traffic_it = traffic_tiles_.find(base);
+  if (traffic_it == traffic_tiles_.end()) {
+    throw std::runtime_error("No traffic tile for the given id");
+  }
+  return TrafficTile(traffic_tar_, traffic_it->second);
+}
+
 uint64_t TileSet::dataset_id() const {
   if (auto it = tiles_.begin(); it != tiles_.end()) {
-    return get_tile(baldr::GraphId(it->first))->header()->dataset_id();
+    return get_graph_tile(baldr::GraphId(it->first))->header()->dataset_id();
   } else {
     return 0;
   }
@@ -160,10 +169,10 @@ uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& d
 AdminInfo admininfo(const GraphTile& tile, uint32_t index) {
   auto info = tile.admininfo(index);
   return AdminInfo{
-    .country_iso = info.country_iso(),
-    .state_iso = info.state_iso(),
     .country_text = info.country_text(),
     .state_text = info.state_text(),
+    .country_iso = info.country_iso(),
+    .state_iso = info.state_iso(),
   };
 }
 

@@ -1,7 +1,7 @@
 use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
 
-use valhalla::{Config, GraphId, GraphLevel, GraphReader, LatLon, TimeZoneInfo};
+use valhalla::{Config, GraphId, GraphLevel, GraphReader, LatLon, LiveTraffic, TimeZoneInfo};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -43,7 +43,7 @@ fn tile_can_outlive_reader() {
     let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
         .expect("Failed to create GraphReader");
 
-    let tile = reader.tile(reader.tiles()[0]).unwrap();
+    let tile = reader.graph_tile(reader.tiles()[0]).unwrap();
     // just do something complicated with the tile
     let count = tile
         .directededges()
@@ -78,8 +78,12 @@ fn tiles_in_bbox() {
         .expect("Failed to create GraphReader");
 
     assert!(
-        reader.tile(GraphId::default()).is_none(),
+        reader.graph_tile(GraphId::default()).is_none(),
         "Default tile should not exist"
+    );
+    assert!(
+        reader.traffic_tile(GraphId::default()).is_none(),
+        "Default traffic tile should not exist"
     );
 
     let mut all_tiles = reader.tiles();
@@ -123,14 +127,31 @@ fn tiles_in_bbox() {
             assert_eq!(tile_id.id(), 0);
             assert_eq!(tile_id.tile(), tile_id);
 
-            let tile = reader.tile(tile_id);
+            let tile = reader.graph_tile(tile_id);
             assert!(tile.is_some(), "Tile should exist for ID: {tile_id:?}");
             let tile = tile.unwrap();
             assert_eq!(tile.id(), tile_id, "Tile ID mismatch for {tile_id:?}");
+
+            let traffic_tile = reader.traffic_tile(tile_id);
+            assert!(
+                traffic_tile.is_some(),
+                "Traffic tile should exist for ID: {tile_id:?}"
+            );
+            let traffic_tile = traffic_tile.unwrap();
+            assert_eq!(
+                traffic_tile.id(),
+                tile_id,
+                "Traffic tile ID mismatch for {tile_id:?}"
+            );
+            assert_eq!(
+                traffic_tile.edge_count() as usize,
+                tile.directededges().len(),
+                "Mismatch in edge count for {tile_id:?}"
+            );
         }
     }
 
-    let tile = reader.tile(reader.tiles()[0]).unwrap();
+    let tile = reader.graph_tile(reader.tiles()[0]).unwrap();
     // The first admin info is always empty (for ocean)
     let admininfo = tile.admin_info(0).unwrap();
     assert_eq!(admininfo.country_iso, "");
@@ -161,7 +182,7 @@ fn edges_in_tile() {
         .expect("Failed to create GraphReader");
 
     for tile_id in reader.tiles() {
-        let tile = reader.tile(tile_id).unwrap();
+        let tile = reader.graph_tile(tile_id).unwrap();
 
         let slice = tile.directededges();
         assert!(!slice.is_empty(), "Tile should always have directed edges");
@@ -200,7 +221,7 @@ fn edges_in_tile() {
             let endnode = de.endnode();
             assert_eq!(de.leaves_tile(), de.endnode().tile() != tile_id.tile());
             if de.leaves_tile() {
-                assert!(reader.tile(endnode.tile()).is_some());
+                assert!(reader.graph_tile(endnode.tile()).is_some());
             }
         }
         assert!(tile.directededge(slice.len() as u32).is_none());
@@ -219,7 +240,7 @@ fn nodes_in_tile() {
         .expect("Failed to create GraphReader");
 
     for tile_id in reader.tiles() {
-        let tile = reader.tile(tile_id).unwrap();
+        let tile = reader.graph_tile(tile_id).unwrap();
 
         // Same check for nodes
         let slice = tile.nodes();
@@ -257,7 +278,7 @@ fn reverse_edge() {
         .expect("Failed to create GraphReader");
 
     let tile_id = reader.tiles()[0];
-    let tile = reader.tile(tile_id).unwrap();
+    let tile = reader.graph_tile(tile_id).unwrap();
 
     for (de_index, de) in tile.directededges().iter().enumerate() {
         if de.leaves_tile() || de.is_shortcut() {
@@ -290,7 +311,7 @@ fn transitions_in_tile() {
 
     let mut transition_count = 0;
     for tile_id in reader.tiles() {
-        let tile = reader.tile(tile_id).unwrap();
+        let tile = reader.graph_tile(tile_id).unwrap();
 
         // Same check for transitions
         for (i, transition) in tile.transitions().iter().enumerate() {
@@ -316,6 +337,72 @@ fn transitions_in_tile() {
         }
     }
     assert_eq!(transition_count, 3550); // to be changed if tileset changes
+}
+
+#[test]
+fn live_traffic() {
+    // for this test we should work with copy of the traffic tar to avoid modifying the original one
+    let traffic_copy = "tests/andorra/traffic_copy.tar";
+    std::fs::copy(ANDORRA_TRAFFIC, traffic_copy).expect("Failed to copy traffic tar");
+    // Poor man's `defer`
+    struct Cleanup<'a>(&'a str);
+    impl<'a> Drop for Cleanup<'a> {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(self.0);
+        }
+    }
+    let _cleanup = Cleanup(traffic_copy);
+
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: traffic_copy.into(),
+        },
+    };
+
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+    let tile_id = reader.tiles()[0];
+    let tile = reader.graph_tile(tile_id).unwrap();
+    let traffic_tile = reader.traffic_tile(tile_id).unwrap();
+
+    assert_eq!(traffic_tile.last_update(), 0); // initial state
+    traffic_tile.write_last_update(101);
+    assert_eq!(traffic_tile.last_update(), 101);
+    traffic_tile.write_spare(999);
+    assert_eq!(traffic_tile.spare(), 999);
+    traffic_tile.clear_traffic(); // it's important to reset it back for other tests
+    assert_eq!(traffic_tile.last_update(), 0);
+    assert_eq!(traffic_tile.spare(), 999); // spare is not cleared
+    traffic_tile.write_spare(0); // reset spare too
+
+    assert_ne!(traffic_tile.edge_count(), 0);
+    let edge_id = 0;
+    let edge = tile.directededge(edge_id).unwrap();
+
+    // no traffic data in the tileset
+    assert_eq!(
+        traffic_tile.edge_traffic(edge_id),
+        Some(LiveTraffic::UNKNOWN)
+    );
+    assert_eq!(tile.live_speed(edge), None);
+
+    traffic_tile.write_edge_traffic(edge_id, LiveTraffic::CLOSED);
+    assert_eq!(tile.live_speed(edge), Some(0));
+
+    traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(72));
+    assert_eq!(tile.live_speed(edge), Some(72));
+
+    // speed is stored with 2km/h precision
+    traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(73));
+    assert_eq!(tile.live_speed(edge), Some(72));
+
+    // only "overall speed" is used by `live_speed()`. Segmented speeds though are accessible via `/locate`
+    traffic_tile.write_edge_traffic(
+        edge_id,
+        LiveTraffic::from_segmented_speeds(72, [1, 2, 3], [127, 128]),
+    );
+    assert_eq!(tile.live_speed(edge), Some(72));
 }
 
 #[test]
@@ -353,8 +440,8 @@ fn wrong_tile_edgeinfo() {
 
     let tiles = reader.tiles();
     assert!(tiles.len() >= 2, "This test requires at least two tiles");
-    let t1 = reader.tile(tiles[0]).unwrap();
-    let t2 = reader.tile(tiles[1]).unwrap();
+    let t1 = reader.graph_tile(tiles[0]).unwrap();
+    let t2 = reader.graph_tile(tiles[1]).unwrap();
 
     let de = t2.directededge(0).unwrap();
     let _ = t1.edgeinfo(de); // should panic
@@ -368,8 +455,8 @@ fn wrong_tile_node_edges() {
 
     let tiles = reader.tiles();
     assert!(tiles.len() >= 2, "This test requires at least two tiles");
-    let t1 = reader.tile(tiles[0]).unwrap();
-    let t2 = reader.tile(tiles[1]).unwrap();
+    let t1 = reader.graph_tile(tiles[0]).unwrap();
+    let t2 = reader.graph_tile(tiles[1]).unwrap();
 
     let node = t2.node(0).unwrap();
     let _ = t1.node_edges(node); // should panic
@@ -383,8 +470,8 @@ fn wrong_tile_node_transitions() {
 
     let tiles = reader.tiles();
     assert!(tiles.len() >= 2, "This test requires at least two tiles");
-    let t1 = reader.tile(tiles[0]).unwrap();
-    let t2 = reader.tile(tiles[1]).unwrap();
+    let t1 = reader.graph_tile(tiles[0]).unwrap();
+    let t2 = reader.graph_tile(tiles[1]).unwrap();
 
     let node = t2.node(0).unwrap();
     let _ = t1.node_transitions(node); // should panic
