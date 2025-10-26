@@ -17,6 +17,7 @@ struct NodeInfoSlice;
 struct NodeTransitionSlice;
 struct TimeZoneInfo;
 struct TrafficTile;
+struct LatLon;
 
 enum class GraphLevel : uint8_t {
   Highway = 0,
@@ -64,6 +65,9 @@ NodeInfoSlice nodes(const GraphTile& tile);
 
 /// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
 NodeTransitionSlice transitions(const GraphTile& tile);
+
+/// Helper function to get lat,lng for the given node
+LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node);
 
 /// Helper function that workarounds the inability to use `baldr::EdgeInfo` in Rust
 EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de);

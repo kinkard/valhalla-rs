@@ -183,6 +183,12 @@ mod ffi {
         len: usize,
     }
 
+    /// Helper struct to pass coordinates in (lat, lon) format between C++ and Rust.
+    struct LatLon {
+        lat: f64,
+        lon: f64,
+    }
+
     /// Information about the administrative area, such as country or state.
     #[derive(Clone)]
     struct AdminInfo {
@@ -264,6 +270,7 @@ mod ffi {
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
         fn transitions(tile: &GraphTile) -> NodeTransitionSlice;
         fn transition(self: &GraphTile, index: u32) -> Result<*const NodeTransition>;
+        fn node_latlon(tile: &GraphTile, node: &NodeInfo) -> LatLon;
         fn admininfo(tile: &GraphTile, index: u32) -> Result<AdminInfo>;
         unsafe fn IsClosed(self: &GraphTile, de: *const DirectedEdge) -> bool;
         unsafe fn GetSpeed(
@@ -734,6 +741,14 @@ impl GraphTile {
             // But it also sounds nice to handle nullptr in the same way.
             _ => None,
         }
+    }
+
+    /// Coordinate in (lat,lon) format for the given node.
+    /// This gives the exact location of the node with better precision than [`EdgeInfo::shape`] start/end points.
+    pub fn node_latlon(&self, node: &ffi::NodeInfo) -> LatLon {
+        debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
+        let latlon = ffi::node_latlon(&self.0, node);
+        LatLon(latlon.lat, latlon.lon)
     }
 
     /// Slice of all outbound edges for the given node.

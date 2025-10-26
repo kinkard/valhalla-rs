@@ -242,7 +242,6 @@ fn nodes_in_tile() {
     for tile_id in reader.tiles() {
         let tile = reader.graph_tile(tile_id).unwrap();
 
-        // Same check for nodes
         let slice = tile.nodes();
         assert!(!slice.is_empty(), "Tile should always have nodes");
         for (i, node) in slice.iter().enumerate() {
@@ -262,6 +261,11 @@ fn nodes_in_tile() {
 
             // Europe/Andorra or Europe/Madrid or Europe/Paris timezones
             assert!(matches!(node.timezone(), 293 | 313 | 319));
+
+            // All nodes should be within Andorra bbox
+            let ll = tile.node_latlon(node);
+            assert!(ll.0 >= ANDORRA_BBOX.0.0 && ll.0 <= ANDORRA_BBOX.1.0);
+            assert!(ll.1 >= ANDORRA_BBOX.0.1 && ll.1 <= ANDORRA_BBOX.1.1);
         }
     }
 }
@@ -445,6 +449,21 @@ fn wrong_tile_edgeinfo() {
 
     let de = t2.directededge(0).unwrap();
     let _ = t1.edgeinfo(de); // should panic
+}
+
+#[test]
+#[should_panic = "Wrong tile"]
+fn wrong_tile_node_latlon() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let tiles = reader.tiles();
+    assert!(tiles.len() >= 2, "This test requires at least two tiles");
+    let t1 = reader.graph_tile(tiles[0]).unwrap();
+    let t2 = reader.graph_tile(tiles[1]).unwrap();
+
+    let node = t2.node(0).unwrap();
+    let _ = t1.node_latlon(node); // should panic
 }
 
 #[test]

@@ -131,6 +131,12 @@ NodeTransitionSlice transitions(const GraphTile& tile) {
   };
 }
 
+LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node) {
+  const auto base_ll = tile.header()->base_ll();
+  const auto ll = node.latlng(base_ll);
+  return LatLon{ .lat = ll.lat(), .lon = ll.lng() };
+}
+
 EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de) {
   const auto edge_info = tile.edgeinfo(&de);
 
