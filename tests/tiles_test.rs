@@ -266,6 +266,9 @@ fn nodes_in_tile() {
             let ll = tile.node_latlon(node);
             assert!(ll.0 >= ANDORRA_BBOX.0.0 && ll.0 <= ANDORRA_BBOX.1.0);
             assert!(ll.1 >= ANDORRA_BBOX.0.1 && ll.1 <= ANDORRA_BBOX.1.1);
+
+            // This tileset has no elevation data
+            assert_eq!(node.elevation(), -500.0);
         }
     }
 }

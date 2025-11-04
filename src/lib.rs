@@ -399,6 +399,8 @@ mod ffi {
         fn edge_index(self: &NodeInfo) -> u32;
         /// Get the number of outbound directed edges from this node on the current hierarchy level.
         fn edge_count(self: &NodeInfo) -> u32;
+        /// Elevation of the node in meters. Returns `-500.0` if elevation data is not available.
+        fn elevation(self: &NodeInfo) -> f32;
         /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
         fn access(self: &NodeInfo) -> u16;
         /// Index of the administrative area (country) the node is in. Corresponding [`crate::AdminInfo`] can be
