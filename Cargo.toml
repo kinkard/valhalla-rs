@@ -31,16 +31,20 @@ exclude = [
     "valhalla/CHANGELOG.md",
     "valhalla/run_route_scripts",
     "valhalla/src/bindings",
+    "valhalla/src/mjolnir", # Mjolnir is anyway disabled by `ENABLE_DATA_TOOLS=OFF` in build.rs
     "valhalla/taginfo.json",
     "valhalla/test_requests",
     # Somehow, valhalla/LICENSE.md is required for cmake, so all unused docs are excluded in a more specific way.
     "valhalla/third_party/**/*.md",
     # Python bindings and other files not needed for Rust bindings
-    "valhalla/third_party/pybind11/*",
+    "valhalla/third_party/dirent",
+    "valhalla/third_party/fastcov",
+    "valhalla/third_party/nanobind/*",
     "valhalla/third_party/rapidjson/bin/*",
     "valhalla/third_party/tz/NEWS",
     "valhalla/third_party/tz/*.html",
     "valhalla/third_party/unordered_dense/data",
+    "valhalla/third_party/unordered_dense/scripts",
 ]
 
 # Makes possible to run profilers with `cargo bench`, e.g. `samply record cargo bench`
@@ -51,7 +55,7 @@ debug = "line-tables-only"
 bitflags = "2.9"
 # Lock on cxx version prior to https://github.com/dtolnay/cxx/pull/1586 that breaks pointer arithmetic magic we use
 # for fast iteration over slices of `valhalla::DirectedEdge` and `valhalla::NodeInfo`.
-cxx = { version = "=1.0.172", features = ["c++17"] }
+cxx = { version = "=1.0.172", features = ["c++20"] }
 prost = "0.14"
 
 [build-dependencies]
