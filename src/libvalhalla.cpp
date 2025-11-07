@@ -107,28 +107,26 @@ uint64_t TileSet::dataset_id() const {
   }
 }
 
-DirectedEdgeSlice directededges(const GraphTile& tile) {
-  const uint32_t count = tile.header()->directededgecount();
-  return DirectedEdgeSlice{
-    .ptr = count ? tile.directededge(0) : nullptr,
-    .len = count,
-  };
+rust::Slice<const valhalla::baldr::DirectedEdge> directededges(const GraphTile& tile) {
+  auto slice = tile.GetDirectedEdges();
+  return rust::Slice(slice.data(), slice.size());
 }
 
-NodeInfoSlice nodes(const GraphTile& tile) {
-  const uint32_t count = tile.header()->nodecount();
-  return NodeInfoSlice{
-    .ptr = count ? tile.node(0) : nullptr,
-    .len = count,
-  };
+rust::Slice<const valhalla::baldr::NodeInfo> nodes(const GraphTile& tile) {
+  auto slice = tile.GetNodes();
+  return rust::Slice(slice.data(), slice.size());
 }
 
-NodeTransitionSlice transitions(const GraphTile& tile) {
+rust::Slice<const valhalla::baldr::NodeTransition> transitions(const GraphTile& tile) {
+  // apparently, `tile.GetNodeTransitions()` requires `NodeInfo*` to return only transitions for that node.
   const uint32_t count = tile.header()->transitioncount();
-  return NodeTransitionSlice{
-    .ptr = count ? tile.transition(0) : nullptr,
-    .len = count,
-  };
+  return rust::Slice(count ? tile.transition(0) : nullptr, count);
+}
+
+rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const GraphTile& tile,
+                                                                    const valhalla::baldr::NodeInfo& node) {
+  auto slice = tile.GetNodeTransitions(&node);
+  return rust::Slice(slice.data(), slice.size());
 }
 
 LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node) {

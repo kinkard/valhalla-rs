@@ -159,30 +159,6 @@ mod ffi {
         data: [u64; 1],
     }
 
-    /// Helper struct to return a slice of directed edges from C++ to Rust.
-    struct DirectedEdgeSlice {
-        /// Pointer to the first directed edge in the span.
-        ptr: *const DirectedEdge,
-        /// Number of directed edges in the span.
-        len: usize,
-    }
-
-    /// Helper struct to return a slice of nodes from C++ to Rust.
-    struct NodeInfoSlice {
-        /// Pointer to the first node in the span.
-        ptr: *const NodeInfo,
-        /// Number of nodes in the span.
-        len: usize,
-    }
-
-    /// Helper struct to return a slice of node transitions from C++ to Rust.
-    struct NodeTransitionSlice {
-        /// Pointer to the first node transition in the span.
-        ptr: *const NodeTransition,
-        /// Number of node transitions in the span.
-        len: usize,
-    }
-
     /// Helper struct to pass coordinates in (lat, lon) format between C++ and Rust.
     struct LatLon {
         lat: f64,
@@ -263,13 +239,17 @@ mod ffi {
 
         type GraphTile;
         fn id(self: &GraphTile) -> GraphId;
-        fn directededges(tile: &GraphTile) -> DirectedEdgeSlice;
+        // Returned slice works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`].
+        fn directededges(tile: &GraphTile) -> &[DirectedEdge];
         fn directededge(self: &GraphTile, index: usize) -> Result<*const DirectedEdge>;
         fn edgeinfo(tile: &GraphTile, de: &DirectedEdge) -> EdgeInfo;
-        fn nodes(tile: &GraphTile) -> NodeInfoSlice;
+        // Returned slice works only because of the `data: [u64; 4]` definition in [`ffi::NodeInfo`].
+        fn nodes(tile: &GraphTile) -> &[NodeInfo];
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
-        fn transitions(tile: &GraphTile) -> NodeTransitionSlice;
+        // Returned slice works only because of the `data: [u64; 1]` definition in [`ffi::NodeTransition`].
+        fn transitions(tile: &GraphTile) -> &[NodeTransition];
         fn transition(self: &GraphTile, index: u32) -> Result<*const NodeTransition>;
+        fn node_transitions<'a>(tile: &'a GraphTile, node: &NodeInfo) -> &'a [NodeTransition];
         fn node_latlon(tile: &GraphTile, node: &NodeInfo) -> LatLon;
         fn admininfo(tile: &GraphTile, index: u32) -> Result<AdminInfo>;
         unsafe fn IsClosed(self: &GraphTile, de: *const DirectedEdge) -> bool;
@@ -672,17 +652,7 @@ impl GraphTile {
 
     /// Slice of all directed edges in the current tile.
     pub fn directededges(&self) -> &[ffi::DirectedEdge] {
-        let slice = ffi::directededges(&self.0);
-        if slice.len == 0 {
-            return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
-        }
-
-        // Safety: correctness of the pointer arithmetic is checked by integration tests over a real dataset.
-        // This works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`], as the Rust compiler
-        // has no way of knowing the size of the `valhalla::baldr::DirectedEdge` struct and without that field Rust
-        // assumes that `ffi::DirectedEdge` is a zero-sized type (ZST).
-        // At the same time, Valhalla's entire ability to work with binary files (tilesets) relies on this contract.
-        unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
+        ffi::directededges(&self.0)
     }
 
     /// Gets a directed edge by index within the current tile.
@@ -697,17 +667,7 @@ impl GraphTile {
 
     /// Slice of all node in the current tile.
     pub fn nodes(&self) -> &[ffi::NodeInfo] {
-        let slice = ffi::nodes(&self.0);
-        if slice.len == 0 {
-            return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
-        }
-
-        // Safety: correctness of the pointer arithmetic is checked by integration tests over a real dataset.
-        // This works only because of the `data: [u64; 4]` definition in [`ffi::NodeInfo`], as the Rust compiler
-        // has no way of knowing the size of the `valhalla::baldr::NodeInfo` struct and without that field Rust
-        // assumes that `ffi::NodeInfo` is a zero-sized type (ZST).
-        // At the same time, Valhalla's entire ability to work with binary files (tilesets) relies on this contract.
-        unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
+        ffi::nodes(&self.0)
     }
 
     /// Gets a node by index within the current tile.
@@ -721,21 +681,19 @@ impl GraphTile {
     }
 
     /// Slice of all node transitions in the current tile.
+    #[deprecated(
+        since = "0.6.15",
+        note = "please use `GraphTile::node_transitions()` instead"
+    )]
     pub fn transitions(&self) -> &[ffi::NodeTransition] {
-        let slice = ffi::transitions(&self.0);
-        if slice.len == 0 {
-            return &[]; // `std::slice::from_raw_parts` strictly requires a non-null pointer.
-        }
-
-        // Safety: correctness of the pointer arithmetic is checked by integration tests over a real dataset.
-        // This works only because of the `data: [u64; 1]` definition in [`ffi::NodeTransition`], as the Rust compiler
-        // has no way of knowing the size of the `valhalla::baldr::NodeTransition` struct and without that field Rust
-        // assumes that `ffi::NodeTransition` is a zero-sized type (ZST).
-        // At the same time, Valhalla's entire ability to work with binary files (tilesets) relies on this contract.
-        unsafe { std::slice::from_raw_parts(slice.ptr, slice.len) }
+        ffi::transitions(&self.0)
     }
 
     /// Gets a node transition by index within the current tile.
+    #[deprecated(
+        since = "0.6.15",
+        note = "please use `GraphTile::node_transitions()` instead"
+    )]
     pub fn transition(&self, index: u32) -> Option<&ffi::NodeTransition> {
         match self.0.transition(index) {
             Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
@@ -761,14 +719,9 @@ impl GraphTile {
     }
 
     /// Slice of all transitions to other hierarchy levels for the given node.
-    pub fn node_transitions(&self, node: &ffi::NodeInfo) -> &[ffi::NodeTransition] {
+    pub fn node_transitions<'a>(&'a self, node: &ffi::NodeInfo) -> &'a [ffi::NodeTransition] {
         debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
-        #[allow(deprecated)] // we'll keep it as a private method after deprecation
-        let range = node.transitions();
-        if range.is_empty() {
-            return &[]; // most of the nodes have no transitions
-        }
-        &self.transitions()[range]
+        ffi::node_transitions(&self.0, node)
     }
 
     /// Information about the administrative area, such as country or state, by its index.

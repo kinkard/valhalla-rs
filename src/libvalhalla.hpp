@@ -11,10 +11,7 @@ struct tar;
 }
 
 struct AdminInfo;
-struct DirectedEdgeSlice;
 struct EdgeInfo;
-struct NodeInfoSlice;
-struct NodeTransitionSlice;
 struct TimeZoneInfo;
 struct TrafficTile;
 struct LatLon;
@@ -58,13 +55,17 @@ inline valhalla::baldr::GraphId from_parts(uint32_t level, uint32_t tileid, uint
 using GraphTile = const valhalla::baldr::GraphTile;
 
 /// Helper function that allows to iterate over a slice of directed edges of that tile in Rust
-DirectedEdgeSlice directededges(const GraphTile& tile);
+rust::Slice<const valhalla::baldr::DirectedEdge> directededges(const GraphTile& tile);
 
 /// Helper function that allows to iterate over a slice of nodes of that tile in Rust
-NodeInfoSlice nodes(const GraphTile& tile);
+rust::Slice<const valhalla::baldr::NodeInfo> nodes(const GraphTile& tile);
 
 /// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
-NodeTransitionSlice transitions(const GraphTile& tile);
+rust::Slice<const valhalla::baldr::NodeTransition> transitions(const GraphTile& tile);
+
+/// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
+rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const GraphTile& tile,
+                                                                    const valhalla::baldr::NodeInfo& node);
 
 /// Helper function to get lat,lng for the given node
 LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node);
