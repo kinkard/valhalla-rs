@@ -1,6 +1,6 @@
 # An isolated environment for tests and sanity checks on CI
 
-FROM rust:slim-bookworm AS builder
+FROM rust:slim-trixie AS builder
 
 # Rust tools
 RUN rustup component add rustfmt clippy
@@ -36,7 +36,7 @@ RUN cargo build --release
 
 # Multi-stage build example:
 # ```
-# FROM debian:bookworm-slim AS runner
+# FROM debian:trixie-slim AS runner
 # WORKDIR /usr
 # # Runtime dependency for valhalla
 # RUN apt-get update && apt-get install -y --no-install-recommends libprotobuf-lite32
