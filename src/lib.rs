@@ -24,6 +24,7 @@ pub use ffi::NodeTransition;
 pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
 pub use ffi::TrafficTile;
+pub use ffi::encode_weekly_speeds;
 
 #[cxx::bridge]
 mod ffi {
@@ -404,6 +405,23 @@ mod ffi {
         /// Is the transition up to a higher level.
         #[cxx_name = "up"]
         fn upward(self: &NodeTransition) -> bool;
+
+        /// Compresses weekly speed data into base64-encoded string for Valhalla [historical traffic].
+        ///
+        /// Takes 2016 speed values (one per 5-minute bucket covering a full week starting from
+        /// Sunday 00:00) and returns a base64-encoded DCT-II compressed representation suitable
+        /// for the `historical_speeds` column in Valhalla traffic CSV files.
+        ///
+        /// # Examples
+        /// ```
+        /// // Generate sample weekly speed profile (constant 50 km/h)
+        /// let speeds = vec![50.0; 2016];
+        /// let encoded = valhalla::encode_weekly_speeds(&speeds).expect("Failed to encode weekly speeds");
+        /// // Use in CSV: "1/47701/130,50,40,{encoded}"
+        /// ```
+        ///
+        /// [historical traffic]: https://valhalla.github.io/valhalla/mjolnir/historical_traffic/#historical-traffic
+        fn encode_weekly_speeds(speeds: &[f32]) -> Result<String>;
     }
 
     unsafe extern "C++" {

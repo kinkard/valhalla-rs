@@ -375,6 +375,18 @@ fn live_traffic() {
 }
 
 #[test]
+fn historical_traffic() {
+    let speeds = vec![50.0; 2016];
+    let encoded = valhalla::encode_weekly_speeds(&speeds).expect("Failed to encode speeds");
+    assert!(!encoded.is_empty());
+
+    // bad slices should be rejected
+    assert!(valhalla::encode_weekly_speeds(&[]).is_err());
+    assert!(valhalla::encode_weekly_speeds(&[50.0]).is_err());
+    assert!(valhalla::encode_weekly_speeds(&[50.0; 3000]).is_err());
+}
+
+#[test]
 fn tz_info() {
     // Summer
     let unix_timestamp = 1750000000; // Jun 15 2025

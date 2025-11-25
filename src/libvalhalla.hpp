@@ -146,3 +146,14 @@ inline void write_edge_traffic(const TrafficTile& tile, uint32_t edge_index, uin
       "TrafficSpeed requested for edgeid beyond bounds of tile (offset: " + std::to_string(edge_index) +
       ", edge count: " + std::to_string(tile.header->directed_edge_count));
 }
+
+/// Helper function that encodes predicted speeds from a slice of floats and returns a base64 string
+inline rust::String encode_weekly_speeds(rust::Slice<const float> speeds) {
+  if (speeds.size() != valhalla::baldr::kBucketsPerWeek) {
+    throw std::runtime_error("Weekly speeds slice size must be equal to " +
+                             std::to_string(valhalla::baldr::kBucketsPerWeek));
+  }
+
+  auto compressed = valhalla::baldr::compress_speed_buckets(speeds.data());
+  return valhalla::baldr::encode_compressed_speeds(compressed.data());
+}
