@@ -157,3 +157,19 @@ inline rust::String encode_weekly_speeds(rust::Slice<const float> speeds) {
   auto compressed = valhalla::baldr::compress_speed_buckets(speeds.data());
   return valhalla::baldr::encode_compressed_speeds(compressed.data());
 }
+
+/// Helper function that decodes predicted speeds from a base64 string into an array or floats
+inline rust::Vec<float> decode_weekly_speeds(rust::Str encoded) {
+  // todo: replace by std::string_view once Valhalla supports it
+  std::string encoded_str(encoded.data(), encoded.size());
+  const auto coefficients = valhalla::baldr::decode_compressed_speeds(encoded_str);
+
+  rust::Vec<float> speeds;
+  speeds.reserve(valhalla::baldr::kBucketsPerWeek);
+  for (uint32_t i = 0; i < valhalla::baldr::kBucketsPerWeek; ++i) {
+    float speed = valhalla::baldr::decompress_speed_bucket(coefficients.data(), i);
+    speeds.push_back(speed);
+  }
+
+  return speeds;
+}

@@ -24,6 +24,7 @@ pub use ffi::NodeTransition;
 pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
 pub use ffi::TrafficTile;
+pub use ffi::decode_weekly_speeds;
 pub use ffi::encode_weekly_speeds;
 
 #[cxx::bridge]
@@ -406,22 +407,34 @@ mod ffi {
         #[cxx_name = "up"]
         fn upward(self: &NodeTransition) -> bool;
 
-        /// Compresses weekly speed data into base64-encoded string for Valhalla [historical traffic].
+        /// Encodes weekly speed data into a DCT-II compressed base64 string for Valhalla [historical traffic].
         ///
-        /// Takes 2016 speed values (one per 5-minute bucket covering a full week starting from
-        /// Sunday 00:00) and returns a base64-encoded DCT-II compressed representation suitable
-        /// for the `historical_speeds` column in Valhalla traffic CSV files.
+        /// Takes 2016 speed values (one per 5-minute interval covering a full week starting from
+        /// Sunday 00:00) and returns a base64-encoded DCT-II compressed representation suitable for
+        /// the `valhalla_add_predicted_traffic` tool's CSV input.
+        /// N.B.: The encoding is lossy (2016→200 coefficients). Use [`decode_weekly_speeds`] to
+        /// evaluate compression quality if needed.
         ///
         /// # Examples
         /// ```
         /// // Generate sample weekly speed profile (constant 50 km/h)
         /// let speeds = vec![50.0; 2016];
-        /// let encoded = valhalla::encode_weekly_speeds(&speeds).expect("Failed to encode weekly speeds");
+        /// let encoded = valhalla::encode_weekly_speeds(&speeds).expect("Failed to encode");
         /// // Use in CSV: "1/47701/130,50,40,{encoded}"
         /// ```
         ///
         /// [historical traffic]: https://valhalla.github.io/valhalla/mjolnir/historical_traffic/#historical-traffic
         fn encode_weekly_speeds(speeds: &[f32]) -> Result<String>;
+
+        /// Decodes a DCT-II compressed base64 string back to 2016 weekly speed values.
+        ///
+        /// Reconstructs the original weekly speed profile from its compressed representation using
+        /// DCT-III inverse transform. Returns 2016 speed values (one per 5-minute interval covering
+        /// a full week starting from Sunday 00:00). Useful for validating encoding quality since
+        /// the compression is lossy (2016→200→2016 coefficients).
+        ///
+        /// [historical traffic]: https://valhalla.github.io/valhalla/mjolnir/historical_traffic/#historical-traffic
+        fn decode_weekly_speeds(encoded: &str) -> Result<Vec<f32>>;
     }
 
     unsafe extern "C++" {
