@@ -98,15 +98,9 @@ impl From<ffi::Response> for Response {
 /// High-level interface to interact with [Valhalla's API](https://valhalla.github.io/valhalla/api/).
 /// On contrary to the Valhalla REST and C++ APIs, this interface is designed to be used with [`proto::Options`] only,
 /// to avoid unnecessary conversions and to provide a strongly typed interface.
-pub struct Actor {
-    inner: cxx::UniquePtr<ffi::Actor>,
-    /// Buffer to reuse memory for encoded requests.
-    buffer: Vec<u8>,
-}
+pub struct Actor(cxx::UniquePtr<ffi::Actor>);
 
 impl Actor {
-    const INPUT_BUFFER_SIZE: usize = 1024; // 1 KiB is more than enough for most requests.
-
     /// ```
     /// let Ok(config) = valhalla::Config::from_file("path/to/config.json") else {
     ///     return; // Handle error appropriately
@@ -114,10 +108,7 @@ impl Actor {
     /// let actor = valhalla::Actor::new(&config);
     /// ```
     pub fn new(config: &Config) -> Result<Self, Error> {
-        Ok(Self {
-            inner: ffi::new_actor(config.inner())?,
-            buffer: Vec::with_capacity(Self::INPUT_BUFFER_SIZE),
-        })
+        Ok(Self(ffi::new_actor(config.inner())?))
     }
 
     /// Calculates a route between locations.
@@ -425,7 +416,7 @@ impl Actor {
         self.act(ffi::Actor::status, request)
     }
 
-    /// Generic helper function to process request encoding, calling the endpoint and handling cleanup.
+    /// Generic helper function to process request encoding, calling the endpoint and handling response.
     fn act<F>(&mut self, action_fn: F, request: &proto::Options) -> Result<Response, Error>
     where
         F: for<'a> Fn(
@@ -433,17 +424,8 @@ impl Actor {
             &'a [u8],
         ) -> Result<ffi::Response, cxx::Exception>,
     {
-        self.buffer.clear();
-        self.buffer.reserve(request.encoded_len());
-        request.encode_raw(&mut self.buffer);
-
-        let result = action_fn(self.inner.as_mut().unwrap(), &self.buffer);
-
-        // Single huge request can lead to excessive memory usage, let's keep it manageable.
-        if self.buffer.capacity() > Self::INPUT_BUFFER_SIZE {
-            self.buffer = Vec::with_capacity(Self::INPUT_BUFFER_SIZE);
-        }
-
+        let buffer = request.encode_to_vec();
+        let result = action_fn(self.0.as_mut().unwrap(), &buffer);
         Ok(Response::from(result?))
     }
 
