@@ -355,6 +355,9 @@ mod ffi {
         fn bridge(self: &DirectedEdge) -> bool;
         /// Whether this edge is part of a roundabout.
         fn roundabout(self: &DirectedEdge) -> bool;
+        /// Whether this edge crosses a country border.
+        #[cxx_name = "ctry_crossing"]
+        fn crosses_country_border(self: &DirectedEdge) -> bool;
         /// Access modes in the forward direction. Bit mask using [`crate::Access`] constants.
         #[cxx_name = "forwardaccess"]
         fn forwardaccess_u32(self: &DirectedEdge) -> u32;
