@@ -384,7 +384,8 @@ mod ffi {
         /// Elevation of the node in meters. Returns `-500.0` if elevation data is not available.
         fn elevation(self: &NodeInfo) -> f32;
         /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
-        fn access(self: &NodeInfo) -> u16;
+        #[cxx_name = "access"]
+        fn access_u16(self: &NodeInfo) -> u16;
         /// Index of the administrative area (country) the node is in. Corresponding [`crate::AdminInfo`] can be
         /// retrieved using [`crate::GraphTile::admin_info()`].
         fn admin_index(self: &NodeInfo) -> u32;
@@ -893,6 +894,11 @@ impl NodeInfo {
         let start = self.transition_index() as usize;
         let count = self.transition_count() as usize;
         start..start + count
+    }
+
+    /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
+    pub fn access(&self) -> Access {
+        Access::from_bits_retain(self.access_u16())
     }
 }
 

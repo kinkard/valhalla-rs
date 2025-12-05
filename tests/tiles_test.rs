@@ -1,7 +1,9 @@
 use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
 
-use valhalla::{Config, GraphId, GraphLevel, GraphReader, LatLon, LiveTraffic, TimeZoneInfo};
+use valhalla::{
+    Access, Config, GraphId, GraphLevel, GraphReader, LatLon, LiveTraffic, TimeZoneInfo,
+};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -239,6 +241,7 @@ fn nodes_in_tile() {
     let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
         .expect("Failed to create GraphReader");
 
+    let mut no_auto_access_count = 0;
     let mut transition_count = 0;
     for tile_id in reader.tiles() {
         let tile = reader.graph_tile(tile_id).unwrap();
@@ -271,9 +274,14 @@ fn nodes_in_tile() {
 
             // This tileset has no elevation data
             assert_eq!(node.elevation(), -500.0);
+
+            if !node.access().contains(Access::AUTO) {
+                no_auto_access_count += 1;
+            }
         }
     }
     assert_eq!(transition_count, 3550); // to be changed if tileset changes
+    assert_eq!(no_auto_access_count, 22); // all nodes should have auto access
 }
 
 #[test]
