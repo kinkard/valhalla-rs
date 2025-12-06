@@ -251,6 +251,7 @@ mod ffi {
         // Returned slice works only because of the `data: [u64; 1]` definition in [`ffi::NodeTransition`].
         fn transitions(tile: &GraphTile) -> &[NodeTransition];
         fn transition(self: &GraphTile, index: u32) -> Result<*const NodeTransition>;
+        fn node_edges<'a>(tile: &'a GraphTile, node: &NodeInfo) -> &'a [DirectedEdge];
         fn node_transitions<'a>(tile: &'a GraphTile, node: &NodeInfo) -> &'a [NodeTransition];
         fn node_latlon(tile: &GraphTile, node: &NodeInfo) -> LatLon;
         fn admininfo(tile: &GraphTile, index: u32) -> Result<AdminInfo>;
@@ -749,8 +750,7 @@ impl GraphTile {
     /// Slice of all outbound edges for the given node.
     pub fn node_edges(&self, node: &ffi::NodeInfo) -> &[ffi::DirectedEdge] {
         debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
-        #[allow(deprecated)] // we'll keep it as a private method after deprecation
-        &self.directededges()[node.edges()]
+        ffi::node_edges(&self.0, node)
     }
 
     /// Slice of all transitions to other hierarchy levels for the given node.

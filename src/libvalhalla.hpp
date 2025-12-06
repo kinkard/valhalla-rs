@@ -55,17 +55,38 @@ inline valhalla::baldr::GraphId from_parts(uint32_t level, uint32_t tileid, uint
 using GraphTile = const valhalla::baldr::GraphTile;
 
 /// Helper function that allows to iterate over a slice of directed edges of that tile in Rust
-rust::Slice<const valhalla::baldr::DirectedEdge> directededges(const GraphTile& tile);
+inline rust::Slice<const valhalla::baldr::DirectedEdge> directededges(const GraphTile& tile) {
+  auto slice = tile.GetDirectedEdges();
+  return rust::Slice(slice.data(), slice.size());
+}
 
 /// Helper function that allows to iterate over a slice of nodes of that tile in Rust
-rust::Slice<const valhalla::baldr::NodeInfo> nodes(const GraphTile& tile);
+inline rust::Slice<const valhalla::baldr::NodeInfo> nodes(const GraphTile& tile) {
+  auto slice = tile.GetNodes();
+  return rust::Slice(slice.data(), slice.size());
+}
 
 /// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
-rust::Slice<const valhalla::baldr::NodeTransition> transitions(const GraphTile& tile);
+inline rust::Slice<const valhalla::baldr::NodeTransition> transitions(const GraphTile& tile) {
+  // apparently, `tile.GetNodeTransitions()` requires `NodeInfo*` to return only transitions for that node.
+  const uint32_t count = tile.header()->transitioncount();
+  return rust::Slice(count ? tile.transition(0) : nullptr, count);
+}
+
+/// Helper function that allows to iterate over a slice of node edges of that tile in Rust
+inline rust::Slice<const valhalla::baldr::DirectedEdge> node_edges(const GraphTile& tile,
+                                                                   const valhalla::baldr::NodeInfo& node) {
+  auto edges = tile.GetDirectedEdges();
+  // Safety: Rust side of bindings has an assert that this node belongs to the given tile.
+  return rust::Slice(edges.data() + node.edge_index(), node.edge_count());
+}
 
 /// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
-rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const GraphTile& tile,
-                                                                    const valhalla::baldr::NodeInfo& node);
+inline rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const GraphTile& tile,
+                                                                           const valhalla::baldr::NodeInfo& node) {
+  auto slice = tile.GetNodeTransitions(&node);
+  return rust::Slice(slice.data(), slice.size());
+}
 
 /// Helper function to get lat,lng for the given node
 LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node);

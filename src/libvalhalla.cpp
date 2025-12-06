@@ -107,28 +107,6 @@ uint64_t TileSet::dataset_id() const {
   }
 }
 
-rust::Slice<const valhalla::baldr::DirectedEdge> directededges(const GraphTile& tile) {
-  auto slice = tile.GetDirectedEdges();
-  return rust::Slice(slice.data(), slice.size());
-}
-
-rust::Slice<const valhalla::baldr::NodeInfo> nodes(const GraphTile& tile) {
-  auto slice = tile.GetNodes();
-  return rust::Slice(slice.data(), slice.size());
-}
-
-rust::Slice<const valhalla::baldr::NodeTransition> transitions(const GraphTile& tile) {
-  // apparently, `tile.GetNodeTransitions()` requires `NodeInfo*` to return only transitions for that node.
-  const uint32_t count = tile.header()->transitioncount();
-  return rust::Slice(count ? tile.transition(0) : nullptr, count);
-}
-
-rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const GraphTile& tile,
-                                                                    const valhalla::baldr::NodeInfo& node) {
-  auto slice = tile.GetNodeTransitions(&node);
-  return rust::Slice(slice.data(), slice.size());
-}
-
 LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node) {
   const auto base_ll = tile.header()->base_ll();
   const auto ll = node.latlng(base_ll);
