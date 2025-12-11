@@ -396,6 +396,13 @@ mod ffi {
         /// Time zone index of the node. Corresponding [`crate::TimeZoneInfo`] can be retrieved
         /// using [`crate::TimeZoneInfo::from_id()`].
         fn timezone(self: &NodeInfo) -> u32;
+        /// Relative road density in the area surrounding the node [0,15]. Higher values indicate more roads nearby.
+        /// 15: Avenue des Champs-Elysees in Paris.
+        /// 10: Lombard Street in San Francisco.
+        /// 9: Unter den Linden in Berlin.
+        /// 3: Golden Gate Bridge in San Francisco at the southern end.
+        /// 0: Any rural area.
+        fn density(self: &NodeInfo) -> u32;
         /// Get the index of the first transition from this node.
         fn transition_index(self: &NodeInfo) -> u32;
         /// Get the number of transitions from this node.
@@ -417,7 +424,7 @@ mod ffi {
         /// Takes 2016 speed values (one per 5-minute interval covering a full week starting from
         /// Sunday 00:00) and returns a base64-encoded DCT-II compressed representation suitable for
         /// the `valhalla_add_predicted_traffic` tool's CSV input.
-        /// N.B.: The encoding is lossy (2016→200 coefficients). Use [`decode_weekly_speeds`] to
+        /// N.B.: The encoding is lossy (2016 -> 200 coefficients). Use [`decode_weekly_speeds`] to
         /// evaluate compression quality if needed.
         ///
         /// # Examples
@@ -436,7 +443,7 @@ mod ffi {
         /// Reconstructs the original weekly speed profile from its compressed representation using
         /// DCT-III inverse transform. Returns 2016 speed values (one per 5-minute interval covering
         /// a full week starting from Sunday 00:00). Useful for validating encoding quality since
-        /// the compression is lossy (2016→200→2016 coefficients).
+        /// the compression is lossy (2016 -> 200 -> 2016 coefficients).
         ///
         /// [historical traffic]: https://valhalla.github.io/valhalla/mjolnir/historical_traffic/#historical-traffic
         fn decode_weekly_speeds(encoded: &str) -> Result<Vec<f32>>;

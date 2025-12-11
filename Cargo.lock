@@ -737,7 +737,7 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "valhalla"
-version = "0.6.20"
+version = "0.6.21"
 dependencies = [
  "bitflags",
  "cmake",
