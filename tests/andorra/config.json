@@ -25,7 +25,8 @@
       "transit_available",
       "expansion",
       "centroid",
-      "status"
+      "status",
+      "tile"
     ],
     "logging": {
       "color": true,
@@ -38,6 +39,7 @@
     },
     "service_defaults": {
       "heading_tolerance": 60,
+      "min_zoom_road_class": [7, 7, 8, 10, 11, 11, 13, 14],
       "minimum_reachability": 50,
       "node_snap_tolerance": 5,
       "radius": 0,
@@ -126,6 +128,8 @@
     "include_driving": true,
     "include_pedestrian": true,
     "include_platforms": false,
+    "keep_all_osm_node_ids": false,
+    "keep_osm_node_ids": false,
     "landmarks": "/data/valhalla/landmarks.sqlite",
     "logging": {
       "color": true,
@@ -233,10 +237,12 @@
     "max_distance_disable_hierarchy_culling": 0,
     "max_exclude_locations": 50,
     "max_exclude_polygons_length": 10000,
+    "max_linear_cost_edges": 50000,
     "max_radius": 200,
     "max_reachability": 100,
     "max_timedep_distance": 500000,
     "max_timedep_distance_matrix": 0,
+    "min_linear_cost_factor": 1,
     "motor_scooter": {
       "max_distance": 500000.0,
       "max_locations": 50,
@@ -303,6 +309,8 @@
   },
   "thor": {
     "bidirectional_astar": {
+      "alternative_cost_extend": 1.2,
+      "alternative_iterations_delta": 100000,
       "hierarchy_limits": {
         "expand_within_distance": {
           "0": 100000000.0,
@@ -313,12 +321,13 @@
           "1": 400,
           "2": 100
         }
-      }
+      },
+      "threshold_delta": 420.0
     },
     "clear_reserved_memory": false,
     "costmatrix": {
       "allow_second_pass": false,
-      "check_reverse_connection": false,
+      "check_reverse_connection": true,
       "hierarchy_limits": {
         "max_up_transitions": {
           "1": 400,
@@ -326,7 +335,8 @@
         }
       },
       "max_iterations": 2800,
-      "max_reserved_locations": 25
+      "max_reserved_locations": 25,
+      "min_iterations": 100
     },
     "extended_search": false,
     "logging": {
