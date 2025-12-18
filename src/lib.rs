@@ -209,15 +209,6 @@ mod ffi {
 
         #[namespace = "valhalla::baldr"]
         type GraphId;
-        /// Hierarchy level of the tile this identifier belongs to.
-        fn level(self: &GraphId) -> u32;
-        /// Tile identifier of this GraphId within the hierarchy level.
-        fn tileid(self: &GraphId) -> u32;
-        /// Combined tile information (level and tile id) as a single value.
-        #[cxx_name = "Tile_Base"]
-        fn tile(self: &GraphId) -> GraphId;
-        /// Identifier within the tile, unique within the tile and level.
-        fn id(self: &GraphId) -> u32;
         /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
         fn from_parts(level: u32, tileid: u32, id: u32) -> Result<GraphId>;
 
@@ -521,6 +512,30 @@ impl GraphId {
     /// Returns `None` if the level is invalid (greater than 7) or if the tile ID is invalid (greater than 2^22).
     pub fn from_parts(level: u32, tileid: u32, id: u32) -> Option<Self> {
         ffi::from_parts(level, tileid, id).ok()
+    }
+
+    /// Hierarchy level of the tile this identifier belongs to.
+    #[inline(always)]
+    pub fn level(&self) -> u32 {
+        self.value as u32 & 0x7
+    }
+
+    /// Tile identifier of this GraphId within the hierarchy level.
+    #[inline(always)]
+    pub fn tileid(&self) -> u32 {
+        ((self.value & 0x1fffff8) >> 3) as u32
+    }
+
+    /// Combined tile information (level and tile id) as a single value.
+    #[inline(always)]
+    pub fn tile(&self) -> GraphId {
+        Self::new(self.value & 0x1ffffff)
+    }
+
+    /// Identifier within the tile, unique within the tile and level.
+    #[inline(always)]
+    pub fn id(&self) -> u32 {
+        ((self.value & 0x3ffffe000000) >> 25) as u32
     }
 }
 
