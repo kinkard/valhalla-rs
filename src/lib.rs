@@ -770,7 +770,7 @@ impl GraphTile {
     }
 
     /// Slice of all outbound edges for the given node.
-    pub fn node_edges(&self, node: &ffi::NodeInfo) -> &[ffi::DirectedEdge] {
+    pub fn node_edges<'a>(&'a self, node: &ffi::NodeInfo) -> &'a [ffi::DirectedEdge] {
         debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
         ffi::node_edges(&self.0, node)
     }
