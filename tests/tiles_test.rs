@@ -339,9 +339,29 @@ fn live_traffic() {
 
     let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
         .expect("Failed to create GraphReader");
-    let tile_id = reader.tiles()[0];
+
+    // find a tile the the most edges to have a good number of edges to test
+    let tile_id = {
+        let mut max_edges = 0;
+        let mut max_tile_id = GraphId::default();
+        for tile_id in reader.tiles() {
+            let tile = reader.graph_tile(tile_id).unwrap();
+
+            let edge_count = tile.directededges().len();
+            if edge_count > max_edges {
+                max_edges = edge_count;
+                max_tile_id = tile_id;
+            }
+        }
+        assert!(max_edges > 100);
+        max_tile_id
+    };
     let tile = reader.graph_tile(tile_id).unwrap();
     let traffic_tile = reader.traffic_tile(tile_id).unwrap();
+    assert_eq!(
+        tile.directededges().len(),
+        traffic_tile.edge_count() as usize
+    );
 
     assert_eq!(traffic_tile.last_update(), 0); // initial state
     traffic_tile.write_last_update(101);
@@ -353,33 +373,33 @@ fn live_traffic() {
     assert_eq!(traffic_tile.spare(), 999); // spare is not cleared
     traffic_tile.write_spare(0); // reset spare too
 
-    assert_ne!(traffic_tile.edge_count(), 0);
-    let edge_id = 0;
-    let edge = tile.directededge(edge_id).unwrap();
+    for edge_id in 0..traffic_tile.edge_count() {
+        let edge = tile.directededge(edge_id).unwrap();
 
-    // no traffic data in the tileset
-    assert_eq!(
-        traffic_tile.edge_traffic(edge_id),
-        Some(LiveTraffic::UNKNOWN)
-    );
-    assert_eq!(tile.live_speed(edge), None);
+        // no traffic data in the tileset
+        assert_eq!(
+            traffic_tile.edge_traffic(edge_id),
+            Some(LiveTraffic::UNKNOWN)
+        );
+        assert_eq!(tile.live_speed(edge), None);
 
-    traffic_tile.write_edge_traffic(edge_id, LiveTraffic::CLOSED);
-    assert_eq!(tile.live_speed(edge), Some(0));
+        traffic_tile.write_edge_traffic(edge_id, LiveTraffic::CLOSED);
+        assert_eq!(tile.live_speed(edge), Some(0));
 
-    traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(72));
-    assert_eq!(tile.live_speed(edge), Some(72));
+        traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(72));
+        assert_eq!(tile.live_speed(edge), Some(72));
 
-    // speed is stored with 2km/h precision
-    traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(73));
-    assert_eq!(tile.live_speed(edge), Some(72));
+        // speed is stored with 2km/h precision
+        traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(73));
+        assert_eq!(tile.live_speed(edge), Some(72));
 
-    // only "overall speed" is used by `live_speed()`. Segmented speeds though are accessible via `/locate`
-    traffic_tile.write_edge_traffic(
-        edge_id,
-        LiveTraffic::from_segmented_speeds(72, [1, 2, 3], [127, 128]),
-    );
-    assert_eq!(tile.live_speed(edge), Some(72));
+        // Only "overall speed" is used by `live_speed()`. However, segmented speeds are accessible via `/locate`
+        traffic_tile.write_edge_traffic(
+            edge_id,
+            LiveTraffic::from_segmented_speeds(72, [1, 2, 3], [127, 128]),
+        );
+        assert_eq!(tile.live_speed(edge), Some(72));
+    }
 }
 
 #[test]

@@ -3,7 +3,7 @@
 #include <valhalla/baldr/rapidjson_utils.h>
 #include <boost/property_tree/ptree.hpp>
 
-#include "cxx.h"
+#include "rust/cxx.h"
 
 std::unique_ptr<boost::property_tree::ptree> from_file(rust::slice<const uint8_t> path) {
   auto pt = std::make_unique<boost::property_tree::ptree>();

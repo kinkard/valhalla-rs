@@ -4,6 +4,7 @@ use std::{
 };
 
 use bitflags::bitflags;
+use cxx::ExternType;
 use prost::Message;
 
 mod actor;
@@ -14,13 +15,9 @@ pub use actor::Actor;
 pub use actor::Response;
 pub use config::Config;
 pub use ffi::AdminInfo;
-pub use ffi::DirectedEdge;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
-pub use ffi::GraphId;
 pub use ffi::GraphLevel;
-pub use ffi::NodeInfo;
-pub use ffi::NodeTransition;
 pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
 pub use ffi::TrafficTile;
@@ -35,13 +32,6 @@ mod ffi {
         Highway = 0,
         Arterial = 1,
         Local = 2,
-    }
-
-    /// Identifier of a node or an edge within the tiled, hierarchical graph.
-    /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
-    #[derive(Clone, Copy, Eq)]
-    struct GraphId {
-        value: u64,
     }
 
     /// Edge use type. Indicates specialized uses.
@@ -121,16 +111,6 @@ mod ffi {
         kInvalid = 8,
     }
 
-    /// Directed edge within the graph.
-    struct DirectedEdge {
-        // With this definition and cxx's magic it becomes possible to do pointer arithmetic properly,
-        // allowing to operate with slices of `DirectedEdge` in Rust.
-        // Otherwise, Rust compiler has no way to know the size of the `DirectedEdge` struct and assumes that
-        // `DirectedEdge` is a zero-sized type (ZST), which leads to incorrect pointer arithmetic.
-        // The whole Valhalla's ability to work with binary files (tilesets) relies this contract.
-        data: [u64; 6],
-    }
-
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
     struct EdgeInfo {
         /// OSM Way ID of the edge.
@@ -139,26 +119,6 @@ mod ffi {
         speed_limit: u8,
         /// polyline6 encoded shape of the edge.
         shape: String,
-    }
-
-    /// Information held for each node within the graph. The graph uses a forward star structure:
-    /// nodes point to the first outbound directed edge and each directed edge points to the other
-    /// end node of the edge.
-    struct NodeInfo {
-        // With this definition and cxx's magic it becomes possible to do pointer arithmetic properly,
-        // allowing to operate with slices of `NodeInfo` in Rust.
-        // Otherwise, Rust compiler has no way to know the size of the `NodeInfo` struct and assumes that
-        // `NodeInfo` is a zero-sized type (ZST), which leads to incorrect pointer arithmetic.
-        // The whole Valhalla's ability to work with binary files (tilesets) relies this contract.
-        data: [u64; 4],
-    }
-
-    /// Records a transition between a node on the current tile and a node
-    /// at the same position on a different hierarchy level. Stores the GraphId
-    /// of the end node as well as a flag indicating whether the transition is
-    /// upwards (true) or downwards (false).
-    struct NodeTransition {
-        data: [u64; 1],
     }
 
     /// Helper struct to pass coordinates in (lat, lon) format between C++ and Rust.
@@ -197,10 +157,15 @@ mod ffi {
         /// Pointer to `valhalla::baldr::TrafficTileHeader` of the tile.
         header: *const u64,
         /// Pointer to the start of the array of `valhalla::baldr::TrafficSpeed` records for the tile.
-        speeds: *const u64,
+        speeds: *mut u64,
+        /// Number of directed edges in the tile and thus number of `TrafficSpeed` records.
+        edge_count: u32,
         /// Shared ownership of the underlying memory-mapped file.
         traffic_tar: SharedPtr<tar>,
     }
+
+    // Force cxx to generate Vec<GraphId> support.
+    impl Vec<GraphId> {}
 
     unsafe extern "C++" {
         include!("valhalla/src/libvalhalla.hpp");
@@ -208,7 +173,7 @@ mod ffi {
         type GraphLevel;
 
         #[namespace = "valhalla::baldr"]
-        type GraphId;
+        type GraphId = crate::GraphId;
         /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
         fn from_parts(level: u32, tileid: u32, id: u32) -> Result<GraphId>;
 
@@ -262,26 +227,16 @@ mod ffi {
         #[namespace = "valhalla::midgard"]
         type tar;
 
-        type TrafficTile;
         /// GraphID of the tile, which includes the tile ID and hierarchy level.
-        fn id(self: &TrafficTile) -> GraphId;
+        fn id(tile: &TrafficTile) -> GraphId;
         /// Seconds since epoch of the last update.
-        fn last_update(self: &TrafficTile) -> u64;
-        /// Custom spare value stored in the header.
-        fn spare(self: &TrafficTile) -> u64;
-        /// Number of directed edges in this traffic tile.
-        fn edge_count(self: &TrafficTile) -> u32;
-        /// Live traffic information for the given edge index in the tile.
-        fn edge_traffic(tile: &TrafficTile, edge_index: u32) -> Result<u64>;
+        fn last_update(tile: &TrafficTile) -> u64;
         /// Writes the last update timestamp to the memory-mapped file.
-        fn write_last_update(self: &TrafficTile, unix_timestamp: u64);
+        fn write_last_update(tile: &TrafficTile, unix_timestamp: u64);
+        /// Custom spare value stored in the header.
+        fn spare(tile: &TrafficTile) -> u64;
         /// Writes a custom value to the spare field in the memory-mapped file.
-        fn write_spare(self: &TrafficTile, spare: u64);
-        /// Writes live traffic information for the given edge index in the tile.
-        fn write_edge_traffic(tile: &TrafficTile, edge_index: u32, traffic: u64) -> Result<()>;
-        /// Clears live traffic information in the tile and sets the last update time to 0.
-        /// The spare field is left unchanged.
-        fn clear_traffic(self: &TrafficTile);
+        fn write_spare(tile: &TrafficTile, spare: u64);
 
         #[namespace = "valhalla::baldr"]
         #[cxx_name = "Use"]
@@ -291,7 +246,7 @@ mod ffi {
         type RoadClass;
 
         #[namespace = "valhalla::baldr"]
-        type DirectedEdge;
+        type DirectedEdge = crate::DirectedEdge;
         /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if end node is in a different tile.
         ///
         /// # Examples
@@ -370,7 +325,7 @@ mod ffi {
         fn leaves_tile(self: &DirectedEdge) -> bool;
 
         #[namespace = "valhalla::baldr"]
-        type NodeInfo;
+        type NodeInfo = crate::NodeInfo;
         /// Get the index of the first outbound edge from this node. Since all outbound edges are
         /// in the same tile/level as the node we only need an index within the tile.
         fn edge_index(self: &NodeInfo) -> u32;
@@ -403,7 +358,7 @@ mod ffi {
         fn from_id(id: u32, unix_timestamp: u64) -> Result<TimeZoneInfo>;
 
         #[namespace = "valhalla::baldr"]
-        type NodeTransition;
+        type NodeTransition = crate::NodeTransition;
         /// Graph id of the corresponding node on another hierarchy level.
         fn endnode(self: &NodeTransition) -> GraphId;
         /// Is the transition up to a higher level.
@@ -465,6 +420,19 @@ unsafe impl Sync for ffi::GraphTile {}
 // Safety: All operations do not mutate [`DynamicCost`] inner state.
 unsafe impl Send for ffi::DynamicCost {}
 unsafe impl Sync for ffi::DynamicCost {}
+
+/// Identifier of a node or an edge within the tiled, hierarchical graph.
+/// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
+#[derive(Clone, Copy, Eq)]
+#[repr(C)]
+pub struct GraphId {
+    pub value: u64,
+}
+
+unsafe impl ExternType for GraphId {
+    type Id = cxx::type_id!("valhalla::baldr::GraphId");
+    type Kind = cxx::kind::Trivial;
+}
 
 impl Default for GraphId {
     fn default() -> Self {
@@ -842,6 +810,22 @@ impl GraphTile {
     }
 }
 
+/// Directed edge within the graph.
+#[repr(C)]
+pub struct DirectedEdge {
+    // With this definition and cxx's magic it becomes possible to do pointer arithmetic properly,
+    // allowing to operate with slices of `DirectedEdge` in Rust.
+    // Otherwise, Rust compiler has no way to know the size of the `DirectedEdge` struct and assumes that
+    // `DirectedEdge` is a zero-sized type (ZST), which leads to incorrect pointer arithmetic.
+    // The whole Valhalla's ability to work with binary files (tilesets) relies this contract.
+    data: [u64; 6],
+}
+
+unsafe impl ExternType for DirectedEdge {
+    type Id = cxx::type_id!("valhalla::baldr::DirectedEdge");
+    type Kind = cxx::kind::Trivial;
+}
+
 impl DirectedEdge {
     /// Access modes in the forward direction. Bit mask using [`Access`] constants.
     #[inline(always)]
@@ -854,6 +838,24 @@ impl DirectedEdge {
     pub fn reverseaccess(&self) -> Access {
         Access::from_bits_retain(self.reverseaccess_u32() as u16)
     }
+}
+
+/// Information held for each node within the graph. The graph uses a forward star structure:
+/// nodes point to the first outbound directed edge and each directed edge points to the other
+/// end node of the edge.
+#[repr(C)]
+pub struct NodeInfo {
+    // With this definition and cxx's magic it becomes possible to do pointer arithmetic properly,
+    // allowing to operate with slices of `NodeInfo` in Rust.
+    // Otherwise, Rust compiler has no way to know the size of the `NodeInfo` struct and assumes that
+    // `NodeInfo` is a zero-sized type (ZST), which leads to incorrect pointer arithmetic.
+    // The whole Valhalla's ability to work with binary files (tilesets) relies this contract.
+    data: [u64; 4],
+}
+
+unsafe impl ExternType for NodeInfo {
+    type Id = cxx::type_id!("valhalla::baldr::NodeInfo");
+    type Kind = cxx::kind::Trivial;
 }
 
 impl NodeInfo {
@@ -927,6 +929,20 @@ impl NodeInfo {
     }
 }
 
+/// Records a transition between a node on the current tile and a node
+/// at the same position on a different hierarchy level. Stores the GraphId
+/// of the end node as well as a flag indicating whether the transition is
+/// upwards (true) or downwards (false).
+#[repr(C)]
+pub struct NodeTransition {
+    data: [u64; 1],
+}
+
+unsafe impl ExternType for NodeTransition {
+    type Id = cxx::type_id!("valhalla::baldr::NodeTransition");
+    type Kind = cxx::kind::Trivial;
+}
+
 impl TimeZoneInfo {
     /// Retrieves the timezone information by its index if available. `unix_timestamp` is required to handle DST.
     pub fn from_id(id: u32, unix_timestamp: u64) -> Option<Self> {
@@ -998,17 +1014,60 @@ impl LiveTraffic {
 }
 
 impl TrafficTile {
+    /// GraphID of the tile, which includes the tile ID and hierarchy level.
+    pub fn id(&self) -> GraphId {
+        ffi::id(self)
+    }
+
+    /// Seconds since epoch of the last update.
+    pub fn last_update(&self) -> u64 {
+        ffi::last_update(self)
+    }
+
+    /// Writes the last update timestamp to the memory-mapped file.
+    pub fn write_last_update(&self, unix_timestamp: u64) {
+        ffi::write_last_update(self, unix_timestamp)
+    }
+
+    /// Custom spare value stored in the header.
+    pub fn spare(&self) -> u64 {
+        ffi::spare(self)
+    }
+
+    /// Writes a custom value to the spare field in the memory-mapped file.
+    pub fn write_spare(&self, spare: u64) {
+        ffi::write_spare(self, spare)
+    }
+
+    /// Number of directed edges in this traffic tile.
+    pub fn edge_count(&self) -> u32 {
+        self.edge_count
+    }
+
     /// Live traffic information for the given edge index in the tile if available.
     pub fn edge_traffic(&self, edge_index: u32) -> Option<LiveTraffic> {
-        match ffi::edge_traffic(self, edge_index) {
-            Ok(data) => Some(LiveTraffic(data)),
-            Err(_) => None,
+        if edge_index < self.edge_count {
+            let data = unsafe { std::ptr::read_volatile(self.speeds.add(edge_index as usize)) };
+            Some(LiveTraffic(data))
+        } else {
+            None
         }
     }
 
     /// Writes live traffic information for the given edge index in the tile.
     pub fn write_edge_traffic(&self, edge_index: u32, traffic: LiveTraffic) {
-        let _ = ffi::write_edge_traffic(self, edge_index, traffic.0);
+        if edge_index < self.edge_count {
+            unsafe { std::ptr::write_volatile(self.speeds.add(edge_index as usize), traffic.0) };
+        }
+    }
+
+    /// Clears live traffic information in the tile and sets the last update time to 0.
+    /// The spare field is left unchanged.
+    pub fn clear_traffic(&self) {
+        for i in 0..self.edge_count as usize {
+            unsafe { std::ptr::write_volatile(self.speeds.add(i), 0u64) };
+        }
+        self.write_last_update(0);
     }
 }
 

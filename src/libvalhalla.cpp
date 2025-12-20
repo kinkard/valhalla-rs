@@ -96,7 +96,22 @@ TrafficTile TileSet::get_traffic_tile(valhalla::baldr::GraphId id) const {
   if (traffic_it == traffic_tiles_.end()) {
     throw std::runtime_error("No traffic tile for the given id");
   }
-  return TrafficTile(traffic_tar_, traffic_it->second);
+
+  auto header = reinterpret_cast<volatile baldr::TrafficTileHeader*>(traffic_it->second.first);
+  if (header->traffic_tile_version != baldr::TRAFFIC_TILE_VERSION) {
+    throw std::runtime_error("Unsupported TrafficTile version");
+  }
+  if (sizeof(baldr::TrafficTileHeader) + header->directed_edge_count * sizeof(baldr::TrafficSpeed) !=
+      traffic_it->second.second) {
+    throw std::runtime_error("TrafficTile data size does not match header count");
+  }
+
+  return TrafficTile{
+    .header = reinterpret_cast<const uint64_t*>(traffic_it->second.first),
+    .speeds = reinterpret_cast<uint64_t*>(traffic_it->second.first + sizeof(baldr::TrafficTileHeader)),
+    .edge_count = header->directed_edge_count,
+    .traffic_tar = traffic_tar_,
+  };
 }
 
 uint64_t TileSet::dataset_id() const {
@@ -174,4 +189,34 @@ TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp) {
     .name = tz->name(),
     .offset_seconds = static_cast<int32_t>(tz_info.offset.count()),
   };
+}
+
+inline volatile valhalla::baldr::TrafficTileHeader* tile_header(const TrafficTile& tile) {
+  return reinterpret_cast<volatile valhalla::baldr::TrafficTileHeader*>(const_cast<uint64_t*>(tile.header));
+}
+
+valhalla::baldr::GraphId id(const TrafficTile& tile) {
+  auto header = tile_header(tile);
+  return valhalla::baldr::GraphId(header->tile_id);
+}
+
+uint64_t last_update(const TrafficTile& tile) {
+  auto header = tile_header(tile);
+  return header->last_update;
+}
+
+void write_last_update(const TrafficTile& tile, uint64_t t) {
+  auto header = tile_header(tile);
+  header->last_update = t;
+}
+
+uint64_t spare(const TrafficTile& tile) {
+  auto header = tile_header(tile);
+  return (static_cast<uint64_t>(header->spare2) << 32) | header->spare3;
+}
+
+void write_spare(const TrafficTile& tile, uint64_t s) {
+  auto header = tile_header(tile);
+  header->spare2 = static_cast<uint32_t>(s >> 32);
+  header->spare3 = static_cast<uint32_t>(s & 0xFFFFFFFF);
 }
