@@ -65,7 +65,7 @@ rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, f
   for (auto tile_id : tile_ids) {
     const baldr::GraphId graph_id(tile_id, static_cast<uint32_t>(level), 0);
     // List only tiles that we have
-    if (tiles_.find(graph_id.Tile_Base()) != tiles_.end()) {
+    if (tiles_.find(graph_id.tile_base()) != tiles_.end()) {
       result.push_back(graph_id);
     }
   }
@@ -74,7 +74,7 @@ rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, f
 
 /// Part of the [`baldr::GraphReader::GetGraphTile()`] that gets tile from mmap file
 baldr::graph_tile_ptr TileSet::get_graph_tile(baldr::GraphId id) const {
-  auto base = id.Tile_Base();
+  auto base = id.tile_base();
 
   auto tile_it = tiles_.find(base);
   if (tile_it == tiles_.end()) {
@@ -91,7 +91,7 @@ baldr::graph_tile_ptr TileSet::get_graph_tile(baldr::GraphId id) const {
 }
 
 TrafficTile TileSet::get_traffic_tile(valhalla::baldr::GraphId id) const {
-  auto base = id.Tile_Base();
+  auto base = id.tile_base();
   auto traffic_it = traffic_tiles_.find(base);
   if (traffic_it == traffic_tiles_.end()) {
     throw std::runtime_error("No traffic tile for the given id");
