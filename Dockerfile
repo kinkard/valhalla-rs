@@ -8,8 +8,10 @@ RUN rustup component add rustfmt clippy
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
-    # For some reason GCC fails to compile valhalla so we use clang instead
+    # LLVM toolchain for proper LTO support between Rust and C/C++
     clang \
+    llvm \
+    lld \
     # Valhalla build dependencies
     build-essential \
     cmake \
@@ -19,7 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
     zlib1g-dev
 
-ENV CC=clang CXX=clang++
+# https://doc.rust-lang.org/beta/rustc/linker-plugin-lto.html
+ENV CC=clang CXX=clang++ AR=llvm-ar RANLIB=llvm-ranlib
+# TODO: Latest Rust requires clang-21, which is not available in apt for trixie.
+# Install it for `-Clinker-plugin-lto -Clinker=clang`
+ENV RUSTFLAGS="-Clink-arg=-fuse-ld=lld"
 
 WORKDIR /usr/src/app
 

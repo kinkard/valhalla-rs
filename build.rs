@@ -14,16 +14,19 @@ fn main() {
     // Unity build speeds up compilation but can complicate debugging and profiling.
     // Disable with `UNITY_BUILD=OFF`, e.g. `UNITY_BUILD=OFF cargo bench`
     let unity_build = !matches!(std::env::var("UNITY_BUILD").as_deref(), Ok("OFF"));
+    // LTO between Rust and C++ requires LLD:
+    // https://doc.rust-lang.org/beta/rustc/linker-plugin-lto.html
+    // Disable LTO for Debug builds to have reasonable compile times.
+    let lto = build_type != "Debug" && has_lld();
 
     // Build & link required Valhalla libraries
     let dst = cmake::Config::new("valhalla")
         .define("CMAKE_BUILD_TYPE", build_type)
         .define("CMAKE_EXPORT_COMPILE_COMMANDS", "ON") // Required to extract include paths
-        // // Enable link-time optimization only in Release configuration to have reasonable compile times in Debug
-        // .define(
-        //     "CMAKE_INTERPROCEDURAL_OPTIMIZATION",
-        //     if build_type == "Release" { "ON" } else { "OFF" },
-        // )
+        .define(
+            "CMAKE_INTERPROCEDURAL_OPTIMIZATION",
+            if lto { "ON" } else { "OFF" },
+        )
         // Disable everything we don't need to reduce number of system dependencies and speed up compilation
         .define("ENABLE_TOOLS", "OFF")
         .define("ENABLE_DATA_TOOLS", "OFF")
@@ -128,4 +131,15 @@ fn extract_includes(compile_commands: &Path, cpp_source: &str) -> Vec<String> {
         }
     }
     includes
+}
+
+/// Check whether LLD is being used as the linker.
+fn has_lld() -> bool {
+    if std::env::var("TARGET").is_ok_and(|t| t.contains("apple-darwin")) {
+        return true;
+    }
+    if std::env::var("CARGO_ENCODED_RUSTFLAGS").is_ok_and(|f| f.contains("-fuse-ld=lld")) {
+        return true;
+    }
+    false
 }
