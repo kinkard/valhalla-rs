@@ -39,8 +39,9 @@
     },
     "service_defaults": {
       "heading_tolerance": 60,
-      "min_zoom_road_class": [7, 7, 8, 10, 11, 11, 13, 14],
       "minimum_reachability": 50,
+      "mvt_cache_min_zoom": 11,
+      "mvt_min_zoom_road_class": [7, 7, 8, 11, 11, 12, 13, 14],
       "node_snap_tolerance": 5,
       "radius": 0,
       "search_cutoff": 35000,
