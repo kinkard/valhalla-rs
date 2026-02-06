@@ -37,8 +37,8 @@ fn main() {
         .define("ENABLE_GEOTIFF", "OFF")
         .define("ENABLE_SINGLE_FILES_WERROR", "OFF")
         .define("CMAKE_UNITY_BUILD", if unity_build { "ON" } else { "OFF" })
-        // Switch `graph_tile_ptr` to `std::shared_ptr` that together with cxx `SharedPtr` allows to use `GraphTile` in Rust
-        .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", "ON")
+        // Rust type system guarantees that `GraphTile` instance will be accessed only from a single thread
+        .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", "OFF")
         .define("LOGGING_LEVEL", "WARN") // todo: Provide an API for setting custom loggers to Valhalla
         .build_target("valhalla")
         .build();
@@ -60,8 +60,6 @@ fn main() {
         .file("src/libvalhalla.cpp")
         .std("c++20")
         .includes(valhalla_includes)
-        // Should be defined to have consistent behavior with valhalla tile ref definition.
-        .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", None)
         .flags(if lto { vec!["-flto=thin"] } else { vec![] })
         .compile("libvalhalla-cxxbridge");
 

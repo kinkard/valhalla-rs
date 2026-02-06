@@ -9,6 +9,7 @@ namespace valhalla::midgard {
 struct tar;
 }
 
+// Forward Declarations for shared types, defined in lib.rs
 struct AdminInfo;
 struct EdgeInfo;
 struct TimeZoneInfo;
@@ -36,7 +37,10 @@ struct TileSet {
   rust::Vec<valhalla::baldr::GraphId> tiles() const;
   rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
                                                     GraphLevel level) const;
-  valhalla::baldr::graph_tile_ptr get_graph_tile(valhalla::baldr::GraphId id) const;
+  // It's Rust's side responsibility to manage GraphTile lifetime by doing
+  // - `boost::sp_adl_block::intrusive_ptr_add_ref` each time ptr is cloned
+  // - `boost::sp_adl_block::intrusive_ptr_release` each time ptr is dropped
+  const valhalla::baldr::GraphTile* get_graph_tile(valhalla::baldr::GraphId id) const;
   TrafficTile get_traffic_tile(valhalla::baldr::GraphId id) const;
   uint64_t dataset_id() const;
 };
@@ -44,36 +48,41 @@ struct TileSet {
 /// Creates a new [`TileSet`] instance based on a Valhalla's config.
 std::shared_ptr<TileSet> new_tileset(const boost::property_tree::ptree& config);
 
+inline const valhalla::baldr::GraphTile* clone(const valhalla::baldr::GraphTile* tile) {
+  boost::sp_adl_block::intrusive_ptr_add_ref(tile);
+  return tile;
+}
+
+inline void drop(const valhalla::baldr::GraphTile* tile) {
+  boost::sp_adl_block::intrusive_ptr_release(tile);
+}
+
 /// Helper function as cxx unable to call constructors with arguments.
 inline valhalla::baldr::GraphId from_parts(uint32_t level, uint32_t tileid, uint32_t id) {
   return valhalla::baldr::GraphId(tileid, level, id);
 }
 
-/// The workaround to use `SharedPtr<GraphTile>` in Rust because of the `graph_tile_ptr` defined as
-/// `std::shared_ptr<const GraphTile>` and `cxx` doesn't support `const` in `SharedPtr`.
-using GraphTile = const valhalla::baldr::GraphTile;
-
 /// Helper function that allows to iterate over a slice of directed edges of that tile in Rust
-inline rust::Slice<const valhalla::baldr::DirectedEdge> directededges(const GraphTile& tile) {
+inline rust::Slice<const valhalla::baldr::DirectedEdge> directededges(const valhalla::baldr::GraphTile& tile) {
   auto slice = tile.GetDirectedEdges();
   return rust::Slice(slice.data(), slice.size());
 }
 
 /// Helper function that allows to iterate over a slice of nodes of that tile in Rust
-inline rust::Slice<const valhalla::baldr::NodeInfo> nodes(const GraphTile& tile) {
+inline rust::Slice<const valhalla::baldr::NodeInfo> nodes(const valhalla::baldr::GraphTile& tile) {
   auto slice = tile.GetNodes();
   return rust::Slice(slice.data(), slice.size());
 }
 
 /// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
-inline rust::Slice<const valhalla::baldr::NodeTransition> transitions(const GraphTile& tile) {
+inline rust::Slice<const valhalla::baldr::NodeTransition> transitions(const valhalla::baldr::GraphTile& tile) {
   // apparently, `tile.GetNodeTransitions()` requires `NodeInfo*` to return only transitions for that node.
   const uint32_t count = tile.header()->transitioncount();
   return rust::Slice(count ? tile.transition(0) : nullptr, count);
 }
 
 /// Helper function that allows to iterate over a slice of node edges of that tile in Rust
-inline rust::Slice<const valhalla::baldr::DirectedEdge> node_edges(const GraphTile& tile,
+inline rust::Slice<const valhalla::baldr::DirectedEdge> node_edges(const valhalla::baldr::GraphTile& tile,
                                                                    const valhalla::baldr::NodeInfo& node) {
   auto edges = tile.GetDirectedEdges();
   // Safety: Rust side of bindings has an assert that this node belongs to the given tile.
@@ -81,23 +90,23 @@ inline rust::Slice<const valhalla::baldr::DirectedEdge> node_edges(const GraphTi
 }
 
 /// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
-inline rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const GraphTile& tile,
+inline rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const valhalla::baldr::GraphTile& tile,
                                                                            const valhalla::baldr::NodeInfo& node) {
   auto slice = tile.GetNodeTransitions(&node);
   return rust::Slice(slice.data(), slice.size());
 }
 
 /// Helper function to get lat,lng for the given node
-LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node);
+LatLon node_latlon(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::NodeInfo& node);
 
 /// Helper function that workarounds the inability to use `baldr::EdgeInfo` in Rust
-EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
+EdgeInfo edgeinfo(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
 
 /// Helper method that returns 0 if the edge is closed, 255 if live speed in unknown and speed in km/h otherwise
-uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
+uint8_t live_speed(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
 
 /// Helper function to get admin info for a given index
-AdminInfo admininfo(const GraphTile& tile, uint32_t index);
+AdminInfo admininfo(const valhalla::baldr::GraphTile& tile, uint32_t index);
 
 /// Helper function to resolve tz name and offset from a given id and unix timestamp.
 TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp);

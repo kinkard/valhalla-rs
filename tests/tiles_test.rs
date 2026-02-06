@@ -35,7 +35,7 @@ fn dataset_id() {
 }
 
 #[test]
-fn tile_can_outlive_reader() {
+fn graph_tile_can_outlive_reader() {
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
             tile_extract: ANDORRA_TILES.into(),
@@ -66,6 +66,46 @@ fn tile_can_outlive_reader() {
         count, other_count,
         "Tile should remain valid after reader is dropped"
     );
+
+    // Sanity check that clone works as expected
+    let cloned_tile = tile.clone();
+    drop(tile);
+
+    let cloned_count = cloned_tile
+        .directededges()
+        .iter()
+        .filter(|e| cloned_tile.edgeinfo(e).speed_limit == 0)
+        .count();
+    assert_eq!(
+        count, cloned_count,
+        "Tile should remain valid after reader is dropped"
+    );
+}
+
+#[test]
+fn traffic_tile_can_outlive_reader() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let tile = reader.traffic_tile(reader.tiles()[0]).unwrap();
+    tile.write_spare(1);
+    assert_eq!(tile.spare(), 1);
+
+    // Dropping reader should not affect the tile and its data
+    drop(reader);
+
+    assert_eq!(
+        tile.spare(),
+        1,
+        "Tile should remain valid after reader is dropped"
+    );
+    tile.write_spare(0); // cleanup
 }
 
 #[test]

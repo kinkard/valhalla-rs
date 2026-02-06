@@ -1,7 +1,7 @@
 [package]
 name = "valhalla"
 
-version = "0.6.27"
+version = "0.6.28"
 edition = "2024"
 rust-version = "1.85"
 description = "Rust bindings for Valhalla routing engine"
@@ -58,12 +58,12 @@ debug = "line-tables-only"
 [dependencies]
 bitflags = "2"
 # Lock to specific version to avoid accidentally upgrading to a version that somehow breaks compatibility.
-cxx = { version = "=1.0.192", features = ["c++20"] }
+cxx = { version = "=1.0.194", features = ["c++20"] }
 prost = "0.14"
 
 [build-dependencies]
 cmake = "0.1"
-cxx-build = "=1.0.192"
+cxx-build = "=1.0.194"
 miniserde = "0.1"    # For compile_commands.json parsing
 pkg-config = "0.3"
 prost-build = "0.14"

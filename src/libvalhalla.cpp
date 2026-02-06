@@ -73,7 +73,7 @@ rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, f
 }
 
 /// Part of the [`baldr::GraphReader::GetGraphTile()`] that gets tile from mmap file
-baldr::graph_tile_ptr TileSet::get_graph_tile(baldr::GraphId id) const {
+const baldr::GraphTile* TileSet::get_graph_tile(baldr::GraphId id) const {
   auto base = id.tile_base();
 
   auto tile_it = tiles_.find(base);
@@ -86,11 +86,12 @@ baldr::graph_tile_ptr TileSet::get_graph_tile(baldr::GraphId id) const {
   auto traffic =
       traffic_it != traffic_tiles_.end() ? std::make_unique<GraphMemory>(traffic_tar_, traffic_it->second) : nullptr;
 
-  // This initializes the tile from mmap
-  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tar_, tile_it->second), std::move(traffic));
+  // cxx doesn't support `boost::intrusive_ptr<T>`, so instead all refcounting should be done manually
+  auto ptr = baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tar_, tile_it->second), std::move(traffic));
+  return ptr.detach();
 }
 
-TrafficTile TileSet::get_traffic_tile(valhalla::baldr::GraphId id) const {
+TrafficTile TileSet::get_traffic_tile(baldr::GraphId id) const {
   auto base = id.tile_base();
   auto traffic_it = traffic_tiles_.find(base);
   if (traffic_it == traffic_tiles_.end()) {
@@ -122,13 +123,13 @@ uint64_t TileSet::dataset_id() const {
   }
 }
 
-LatLon node_latlon(const GraphTile& tile, const valhalla::baldr::NodeInfo& node) {
+LatLon node_latlon(const baldr::GraphTile& tile, const baldr::NodeInfo& node) {
   const auto base_ll = tile.header()->base_ll();
   const auto ll = node.latlng(base_ll);
   return LatLon{ .lat = ll.lat(), .lon = ll.lng() };
 }
 
-EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de) {
+EdgeInfo edgeinfo(const baldr::GraphTile& tile, const baldr::DirectedEdge& de) {
   const auto edge_info = tile.edgeinfo(&de);
 
   rust::string shape;
@@ -137,7 +138,7 @@ EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de
     shape = midgard::encode(edge_info.shape());
   } else {
     // If the edge is not forward, we need to reverse the shape
-    std::vector<valhalla::midgard::PointLL> edge_shape = edge_info.shape();
+    std::vector<midgard::PointLL> edge_shape = edge_info.shape();
     std::reverse(edge_shape.begin(), edge_shape.end());
     shape = midgard::encode(edge_shape);
   }
@@ -152,7 +153,7 @@ EdgeInfo edgeinfo(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de
   };
 }
 
-uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& de) {
+uint8_t live_speed(const baldr::GraphTile& tile, const baldr::DirectedEdge& de) {
   const volatile auto& live_speed_data = tile.trafficspeed(&de);
   if (!live_speed_data.speed_valid()) {
     return 255;  // No valid live speed data
@@ -163,7 +164,7 @@ uint8_t live_speed(const GraphTile& tile, const valhalla::baldr::DirectedEdge& d
   return live_speed_data.get_overall_speed();
 }
 
-AdminInfo admininfo(const GraphTile& tile, uint32_t index) {
+AdminInfo admininfo(const baldr::GraphTile& tile, uint32_t index) {
   auto info = tile.admininfo(index);
   return AdminInfo{
     .country_text = info.country_text(),
@@ -174,7 +175,7 @@ AdminInfo admininfo(const GraphTile& tile, uint32_t index) {
 }
 
 TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp) {
-  const date::time_zone* tz = valhalla::baldr::DateTime::get_tz_db().from_index(id);
+  const date::time_zone* tz = baldr::DateTime::get_tz_db().from_index(id);
   if (!tz) {
     throw std::runtime_error("Invalid time zone id: " + std::to_string(id));
   }
@@ -191,13 +192,13 @@ TimeZoneInfo from_id(uint32_t id, uint64_t unix_timestamp) {
   };
 }
 
-inline volatile valhalla::baldr::TrafficTileHeader* tile_header(const TrafficTile& tile) {
-  return reinterpret_cast<volatile valhalla::baldr::TrafficTileHeader*>(const_cast<uint64_t*>(tile.header));
+inline volatile baldr::TrafficTileHeader* tile_header(const TrafficTile& tile) {
+  return reinterpret_cast<volatile baldr::TrafficTileHeader*>(const_cast<uint64_t*>(tile.header));
 }
 
-valhalla::baldr::GraphId id(const TrafficTile& tile) {
+baldr::GraphId id(const TrafficTile& tile) {
   auto header = tile_header(tile);
-  return valhalla::baldr::GraphId(header->tile_id);
+  return baldr::GraphId(header->tile_id);
 }
 
 uint64_t last_update(const TrafficTile& tile) {
