@@ -464,6 +464,7 @@ impl fmt::Display for GraphId {
 }
 
 impl PartialEq for GraphId {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
@@ -476,12 +477,14 @@ impl Hash for GraphId {
 }
 
 impl GraphId {
+    #[inline(always)]
     pub fn new(value: u64) -> Self {
         Self { value }
     }
 
     /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
     /// Returns `None` if the level is invalid (greater than 7) or if the tile ID is invalid (greater than 2^22).
+    #[inline(always)]
     pub fn from_parts(level: u32, tileid: u32, id: u32) -> Option<Self> {
         ffi::from_parts(level, tileid, id).ok()
     }
@@ -699,11 +702,13 @@ impl GraphTile {
     }
 
     /// GraphID of the tile, which includes the tile ID and hierarchy level.
+    #[inline(always)]
     pub fn id(&self) -> GraphId {
         self.deref().id()
     }
 
     /// Slice of all directed edges in the current tile.
+    #[inline(always)]
     pub fn directededges(&self) -> &[ffi::DirectedEdge] {
         ffi::directededges(self.deref())
     }
@@ -719,6 +724,7 @@ impl GraphTile {
     }
 
     /// Slice of all node in the current tile.
+    #[inline(always)]
     pub fn nodes(&self) -> &[ffi::NodeInfo] {
         ffi::nodes(self.deref())
     }
@@ -758,6 +764,7 @@ impl GraphTile {
 
     /// Coordinate in (lat,lon) format for the given node.
     /// This gives the exact location of the node with better precision than [`EdgeInfo::shape`] start/end points.
+    #[inline(always)]
     pub fn node_latlon(&self, node: &ffi::NodeInfo) -> LatLon {
         debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
         let latlon = ffi::node_latlon(self.deref(), node);
@@ -765,12 +772,14 @@ impl GraphTile {
     }
 
     /// Slice of all outbound edges for the given node.
+    #[inline(always)]
     pub fn node_edges<'a>(&'a self, node: &ffi::NodeInfo) -> &'a [ffi::DirectedEdge] {
         debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
         ffi::node_edges(self.deref(), node)
     }
 
     /// Slice of all transitions to other hierarchy levels for the given node.
+    #[inline(always)]
     pub fn node_transitions<'a>(&'a self, node: &ffi::NodeInfo) -> &'a [ffi::NodeTransition] {
         debug_assert!(ref_within_slice(self.nodes(), node), "Wrong tile");
         ffi::node_transitions(self.deref(), node)
@@ -783,12 +792,14 @@ impl GraphTile {
     }
 
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
+    #[inline(always)]
     pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
         debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         ffi::edgeinfo(self.deref(), de)
     }
 
     /// Edge's live traffic speed in km/h if available. Returns `Some(0)` if the edge is closed due to traffic.
+    #[inline(always)]
     pub fn live_speed(&self, de: &ffi::DirectedEdge) -> Option<u32> {
         debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         match ffi::live_speed(self.deref(), de) {
@@ -803,6 +814,7 @@ impl GraphTile {
     ///   a) have traffic data for that tile
     ///   b) we have a valid record for that edge
     ///   b) the speed is zero
+    #[inline(always)]
     pub fn edge_closed(&self, de: &ffi::DirectedEdge) -> bool {
         debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         unsafe { self.deref().IsClosed(de as *const ffi::DirectedEdge) }
@@ -951,6 +963,7 @@ impl NodeInfo {
     }
 
     /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
+    #[inline(always)]
     pub fn access(&self) -> Access {
         Access::from_bits_retain(self.access_u16())
     }
@@ -972,6 +985,7 @@ unsafe impl ExternType for NodeTransition {
 
 impl TimeZoneInfo {
     /// Retrieves the timezone information by its index if available. `unix_timestamp` is required to handle DST.
+    #[inline(always)]
     pub fn from_id(id: u32, unix_timestamp: u64) -> Option<Self> {
         ffi::from_id(id, unix_timestamp).ok()
     }
@@ -1056,36 +1070,43 @@ impl LiveTraffic {
 
 impl TrafficTile {
     /// GraphID of the tile, which includes the tile ID and hierarchy level.
+    #[inline(always)]
     pub fn id(&self) -> GraphId {
         ffi::id(self)
     }
 
     /// Seconds since epoch of the last update.
+    #[inline(always)]
     pub fn last_update(&self) -> u64 {
         ffi::last_update(self)
     }
 
     /// Writes the last update timestamp to the memory-mapped file.
+    #[inline(always)]
     pub fn write_last_update(&self, unix_timestamp: u64) {
         ffi::write_last_update(self, unix_timestamp)
     }
 
     /// Custom spare value stored in the header.
+    #[inline(always)]
     pub fn spare(&self) -> u64 {
         ffi::spare(self)
     }
 
     /// Writes a custom value to the spare field in the memory-mapped file.
+    #[inline(always)]
     pub fn write_spare(&self, spare: u64) {
         ffi::write_spare(self, spare)
     }
 
     /// Number of directed edges in this traffic tile.
+    #[inline(always)]
     pub fn edge_count(&self) -> u32 {
         self.edge_count
     }
 
     /// Live traffic information for the given edge index in the tile if available.
+    #[inline(always)]
     pub fn edge_traffic(&self, edge_index: u32) -> Option<LiveTraffic> {
         if edge_index < self.edge_count {
             let data = unsafe { std::ptr::read_volatile(self.speeds.add(edge_index as usize)) };
@@ -1096,6 +1117,7 @@ impl TrafficTile {
     }
 
     /// Writes live traffic information for the given edge index in the tile.
+    #[inline(always)]
     pub fn write_edge_traffic(&self, edge_index: u32, traffic: LiveTraffic) {
         if edge_index < self.edge_count {
             unsafe { std::ptr::write_volatile(self.speeds.add(edge_index as usize), traffic.0) };
