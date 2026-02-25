@@ -1038,6 +1038,20 @@ impl LiveTraffic {
             (bp2 << 36), // breakpoint2 at bit 36
         )
     }
+
+    /// Sets the spare bit to the given value, returning a new `LiveTraffic` instance.
+    #[inline(always)]
+    pub const fn with_spare(self, spare: bool) -> Self {
+        let cleared = self.0 & !(1u64 << 63); // Clear the spare bit
+        let spare_bit = (spare as u64) << 63;
+        Self(cleared | spare_bit)
+    }
+
+    /// Gets the value of the spare bit.
+    #[inline(always)]
+    pub const fn spare(&self) -> bool {
+        (self.0 >> 63) & 1 != 0
+    }
 }
 
 impl TrafficTile {

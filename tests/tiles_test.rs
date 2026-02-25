@@ -433,6 +433,14 @@ fn live_traffic() {
         traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(73));
         assert_eq!(tile.live_speed(edge), Some(72));
 
+        // spare bit changes nothing
+        traffic_tile.write_edge_traffic(
+            edge_id,
+            LiveTraffic::from_uniform_speed(72).with_spare(true),
+        );
+        assert_eq!(tile.live_speed(edge), Some(72));
+        assert!(traffic_tile.edge_traffic(edge_id).unwrap().spare());
+
         // Only "overall speed" is used by `live_speed()`. However, segmented speeds are accessible via `/locate`
         traffic_tile.write_edge_traffic(
             edge_id,
