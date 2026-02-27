@@ -149,18 +149,22 @@ mod ffi {
         offset_seconds: i32,
     }
 
-    /// An interface for writing live traffic information for the corresponding graph tile.
+    /// An interface for reading and writing live traffic information for the corresponding graph tile.
     ///
     /// Can be obtained via [`crate::GraphReader::traffic_tile()`].
     /// `TrafficTile` can outlive the [`GraphReader`] that created it.
     struct TrafficTile {
-        /// Pointer to `valhalla::baldr::TrafficTileHeader` of the tile.
-        header: *const u64,
-        /// Pointer to the start of the array of `valhalla::baldr::TrafficSpeed` records for the tile.
+        /// Pointer to [`valhalla::baldr::TrafficTileHeader`] of the tile.
+        ///
+        /// [`valhalla::baldr::TrafficTileHeader`]: https://github.com/valhalla/valhalla/blob/master/valhalla/baldr/traffictile.h
+        header: *mut u64,
+        /// Pointer to the start of the array of [`valhalla::baldr::TrafficSpeed`] records for the tile.
+        ///
+        /// [`valhalla::baldr::TrafficSpeed`]: https://github.com/valhalla/valhalla/blob/master/valhalla/baldr/traffictile.h
         speeds: *mut u64,
         /// Number of directed edges in the tile and thus number of `TrafficSpeed` records.
         edge_count: u32,
-        /// Shared ownership of the underlying memory-mapped file.
+        /// Shared ownership of the underlying memory-mapped file with all traffic tiles.
         traffic_tar: SharedPtr<tar>,
     }
 
@@ -1270,5 +1274,48 @@ mod tests {
         assert!(ref_within_slice(subslice, &data[2]));
         assert!(ref_within_slice(subslice, &data[3]));
         assert!(!ref_within_slice(subslice, &data[4]));
+    }
+
+    #[test]
+    fn test_mock_live_traffic_tile() {
+        let mut header: [u64; 16] = [0; 16]; // it should be just big enough. The exact header size is 32 bytes.
+        let mut speeds: [u64; 16] = [0; 16];
+        let tile = TrafficTile {
+            header: header.as_mut_ptr(),
+            speeds: speeds.as_mut_ptr(),
+            edge_count: 16,
+            traffic_tar: cxx::SharedPtr::null(),
+        };
+
+        assert_eq!(tile.last_update(), 0);
+        assert_eq!(tile.spare(), 0);
+        assert_eq!(tile.edge_count(), 16);
+        for i in 0..tile.edge_count() {
+            assert_eq!(tile.edge_traffic(i), Some(LiveTraffic::UNKNOWN));
+        }
+
+        // Let's mutate stuff
+        tile.write_last_update(1234567890);
+        tile.write_spare(42);
+        for i in 0..tile.edge_count() {
+            tile.write_edge_traffic(i, LiveTraffic::from_uniform_speed(i as u8));
+        }
+
+        assert_eq!(tile.last_update(), 1234567890);
+        assert_eq!(tile.spare(), 42);
+        for i in 0..tile.edge_count() {
+            assert_eq!(
+                tile.edge_traffic(i),
+                Some(LiveTraffic::from_uniform_speed(i as u8))
+            );
+        }
+
+        // Each speed is just a u64, encoded in a specific way. This checks that there is no weirdness in that area.
+        for i in 0..tile.edge_count() {
+            assert_eq!(
+                speeds[i as usize],
+                LiveTraffic::from_uniform_speed(i as u8).to_bits()
+            );
+        }
     }
 }

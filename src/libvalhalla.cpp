@@ -108,7 +108,7 @@ TrafficTile TileSet::get_traffic_tile(baldr::GraphId id) const {
   }
 
   return TrafficTile{
-    .header = reinterpret_cast<const uint64_t*>(traffic_it->second.first),
+    .header = reinterpret_cast<uint64_t*>(traffic_it->second.first),
     .speeds = reinterpret_cast<uint64_t*>(traffic_it->second.first + sizeof(baldr::TrafficTileHeader)),
     .edge_count = header->directed_edge_count,
     .traffic_tar = traffic_tar_,
