@@ -1,13 +1,23 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
-use valhalla::{Actor, Config, LatLon, proto};
+use valhalla::{Actor, ConfigBuilder, LatLon, proto};
 
-const ANDORRA_CONFIG: &str = "tests/andorra/config.json";
+const ANDORRA_TILES: &str = "tests/andorra/tiles.tar";
+const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
+
 const ANDORRA_TEST_LOC_1: LatLon = LatLon(42.50107335756198, 1.510341967860551); // Sant Julia de Loria
 const ANDORRA_TEST_LOC_2: LatLon = LatLon(42.50627089323736, 1.521734167223563); // Andorra la Vella
 
 fn route(c: &mut Criterion) {
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let mut actor = Actor::new(&config).unwrap();
 
     c.bench_function("short route json", |b| {
@@ -104,7 +114,15 @@ fn route(c: &mut Criterion) {
 }
 
 fn trace_attributes(c: &mut Criterion) {
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let mut actor = Actor::new(&config).unwrap();
 
     let shape = "ifadpAyon{A`ClBtAg@~FwKbOwIeAtL[lJt@hDnCtEdB~D|BnDbAj@v@Sr@s@?sAy@gIkA_ICyDh@{Cz@}At@k@fACbAb@j@~@xAvHvHn`@p@pE\\~@t@`@lAoA\\wCo@aRu@uSOoG`@mBr@oAbBw@dBNxA|Bj@|HbDj\\f@lBt@f@fAIr@uCtBaPbCaSj@eD~A{AjCk@nBrBb@jDyJr`AG~DnBzCbChAb@YbAo@bA}FzGmo@pAuHt@iC~AwBhAq@dBIbH~ApCXrBA`Ba@bBz@MvCeB`CeB`A}@f@yDjD}DlEsAlDE|AXrAr@j@|@OnAqAtBmFzAcC|C_@zEg@l@^P~@S|Bo@hA_B|@wBlAmAd@]fBTjCOlJqAbKx@rGFtCN~FcBjIqDxIwBlD?zBGzCg@Rc@^Yl@Ot@Cd@?f@Df@Jb@P^TZVTZLZD\\?ZGXOTSRYN]J_@Fc@|GwAbCG|DCnA@tDf@xCGvI_CfBu@~@i@ZQ|DyBtIeF|BuAdCoERkACoBUoBcBsDyBoCiB_C}@kBuAcEu@aDQw@]uCKsB@qAPkB^cC~@}EdBgGrUih@vAaDjEaJlMqYrMmY|@uA`AiAnDwDtDiDvBiCX[`BoBtDgFjB_ENg@Bk@x@uIb@wG`@eIJyAzAar@^qQ_AsUkCuRy@aGuE}PyDqLyFaJiDiFyMgRsImN_AuAeBsB}ByAkDy@mFe@oEYqF}AsHcDeB{@aA[g@M{Cy@gA[{Bm@{IyBkGaB{EgBmB{@aB}@mCoBgCoB}HaJmSmV}QmUqD{EeDgG}BsFoB{I}@sF_DaYu@yEs@mEs@qCw@eC_DuHeDaIaAaCwEgKkFgL}JkUwHoOqBuDqBuCcB}B_CyBuFeEmDoBwBqA_G_CsFyA_@IoEy@sEk@_DMuAKmBWy@a@w@y@Qq@E}FFW`@eB|@wAbA{@tAc@rBB`DvB~TpNhKtGlSvM|GhEjPlH`NpF";
@@ -140,7 +158,15 @@ fn trace_attributes(c: &mut Criterion) {
 }
 
 fn locate(c: &mut Criterion) {
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let mut actor = Actor::new(&config).unwrap();
 
     c.bench_function("locate", |b| {
@@ -177,7 +203,15 @@ fn locate(c: &mut Criterion) {
 }
 
 fn status(c: &mut Criterion) {
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let mut actor = Actor::new(&config).unwrap();
 
     c.bench_function("status", |b| {

@@ -102,9 +102,15 @@ pub struct Actor(cxx::UniquePtr<ffi::Actor>);
 
 impl Actor {
     /// ```
-    /// let Ok(config) = valhalla::Config::from_file("path/to/config.json") else {
-    ///     return; // Handle error appropriately
-    /// };
+    /// let config = valhalla::ConfigBuilder {
+    ///     mjolnir: valhalla::config::Mjolnir {
+    ///         tile_extract: "path/to/tiles.tar".into(),
+    ///         traffic_extract: "path/to/traffic.tar".into(),
+    ///         ..Default::default()
+    ///     },
+    ///     ..Default::default()
+    /// }
+    /// .build();
     /// let actor = valhalla::Actor::new(&config);
     /// ```
     pub fn new(config: &Config) -> Result<Self, Error> {

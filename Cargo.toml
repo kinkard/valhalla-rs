@@ -1,7 +1,7 @@
 [package]
 name = "valhalla"
 
-version = "0.6.33"
+version = "0.6.34"
 edition = "2024"
 rust-version = "1.87"
 description = "Rust bindings for Valhalla routing engine"
@@ -56,6 +56,7 @@ exclude = [
 # Makes possible to run profilers with `cargo bench`, e.g. `samply record cargo bench`
 [profile.bench]
 debug = "line-tables-only"
+lto = true
 
 [dependencies]
 bitflags = "2"
@@ -82,4 +83,8 @@ harness = false
 
 [[bench]]
 name = "tiles_bench"
+harness = false
+
+[[bench]]
+name = "config_bench"
 harness = false

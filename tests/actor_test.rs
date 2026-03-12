@@ -1,15 +1,25 @@
 use valhalla::{
-    Actor, Config, Error, LatLon, Response,
+    Actor, ConfigBuilder, Error, LatLon, Response,
     proto::{self, options::Format},
 };
 
-const ANDORRA_CONFIG: &str = "tests/andorra/config.json";
+const ANDORRA_TILES: &str = "tests/andorra/tiles.tar";
+const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
+
 const ANDORRA_TEST_LOC_1: LatLon = LatLon(42.50107335756198, 1.510341967860551); // Sant Julia de Loria
 const ANDORRA_TEST_LOC_2: LatLon = LatLon(42.50627089323736, 1.521734167223563); // Andorra la Vella
 
 #[test]
 fn smoke() {
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let actor = Actor::new(&config);
     assert!(actor.is_ok());
 }
@@ -246,7 +256,15 @@ fn request_response_format() {
         },
     ];
 
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let mut actor = Actor::new(&config).unwrap();
 
     for test in tests {
@@ -310,8 +328,16 @@ fn parse_api() {
         Some(proto::costing::options::HasCountryCrossingCost::CountryCrossingCost(0.0))
     );
 
-    // Prsed request should be routable
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    // Parsed request should be routable
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let mut actor = Actor::new(&config).unwrap();
     let response = actor.route(&request);
     let Ok(Response::Json(_)) = response else {

@@ -11,18 +11,56 @@ pub(crate) mod ffi {
         type ptree;
         fn from_file(path: &[u8]) -> Result<UniquePtr<ptree>>;
         fn from_json(config: &str) -> Result<UniquePtr<ptree>>;
+
+        fn ptree_new() -> UniquePtr<ptree>;
+        fn ptree_put_str(pt: Pin<&mut ptree>, path: &str, value: &str);
+        fn ptree_put_bool(pt: Pin<&mut ptree>, path: &str, value: bool);
+        fn ptree_put_int(pt: Pin<&mut ptree>, path: &str, value: i64);
+        fn ptree_put_float(pt: Pin<&mut ptree>, path: &str, value: f64);
+        fn ptree_put_str_array(pt: Pin<&mut ptree>, path: &str, values: &[String]);
+        fn ptree_put_int_array(pt: Pin<&mut ptree>, path: &str, values: &[i64]);
     }
 }
 
 /// Wrapper around Valhalla configuration.
 ///
-/// Provides methods to read configuration from a file or JSON string, created by `valhalla_build_config` script.
-/// For more information about the configuration and available options see the Valhalla documentation:
-/// https://github.com/valhalla/valhalla/blob/master/scripts/valhalla_build_config
+/// The recommended way to create a `Config` is via [`ConfigBuilder`], which
+/// auto-generates all Valhalla defaults at build time:
+///
+/// ```
+/// let config = valhalla::ConfigBuilder {
+///     mjolnir: valhalla::config::Mjolnir {
+///         tile_extract: "./tests/andorra/tiles.tar".into(),
+///         traffic_extract: "./tests/andorra/traffic.tar".into(),
+///         ..Default::default()
+///     },
+///     ..Default::default()
+/// }
+/// .build();
+/// ```
+///
+/// Alternatively, [`Config::from_file`] or [`Config::from_json`] can be used to parse an existing
+/// config JSON, created by [`valhalla_build_config`] script:
+///
+/// ```
+/// let Ok(config) = valhalla::Config::from_file("path/to/config.json") else {
+///     return; // Handle error appropriately
+/// };
+/// ```
+///
+/// N.B.: [`Config::from_file`] and [`Config::from_json`] are provided for convenience but their
+/// use is **fragile**: the expected JSON schema may change between Valhalla versions, causing
+/// hard-to-diagnose runtime failures.
+/// Prefer [`ConfigBuilder`] for forward-compatible configuration.
+///
+/// `valhalla_build_config`: https://github.com/valhalla/valhalla/blob/master/scripts/valhalla_build_config
 pub struct Config(cxx::UniquePtr<ffi::ptree>);
 
 impl Config {
     /// Reads configuration from the given Valhalla configuration file.
+    ///
+    /// **Warning**: The JSON configuration format may change between Valhalla versions.
+    /// Prefer [`ConfigBuilder`] which automatically tracks Valhalla's defaults.
     ///
     /// # Examples
     ///
@@ -37,6 +75,9 @@ impl Config {
 
     /// Reads configuration from Valhalla configuration JSON string.
     ///
+    /// **Warning**: The JSON configuration format may change between Valhalla versions.
+    /// Prefer [`ConfigBuilder`] which automatically tracks Valhalla's defaults.
+    ///
     /// # Examples
     ///
     /// ```
@@ -49,17 +90,24 @@ impl Config {
 
     /// Creates a new Valhalla configuration from path to the tiles tar extract.
     ///
+    /// This is a convenience shortcut for the common case of only needing tile data.
+    /// For more control, use [`ConfigBuilder`].
+    ///
     /// # Examples
     ///
     /// ```
     /// let config = valhalla::Config::from_tile_extract("path/to/tiles.tar");
     /// ```
     pub fn from_tile_extract(tile_extract: impl AsRef<Path>) -> Result<Self, Error> {
-        let config = format!(
-            "{{\"mjolnir\":{{\"tile_extract\":\"{}\"}}}}",
-            tile_extract.as_ref().display()
-        );
-        Self::from_json(&config)
+        let config = ConfigBuilder {
+            mjolnir: Mjolnir {
+                tile_extract: tile_extract.as_ref().display().to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .build();
+        Ok(config)
     }
 
     /// Reference to the inner Valhalla configuration object.
@@ -67,3 +115,6 @@ impl Config {
         self.0.as_ref().unwrap()
     }
 }
+
+// ConfigBuilder and all supporting types.
+include!(concat!(env!("OUT_DIR"), "/config_builder.rs"));

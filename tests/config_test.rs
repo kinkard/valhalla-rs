@@ -3,8 +3,9 @@ use std::{io::Write, path::PathBuf};
 use miniserde::{Serialize, json};
 use tempfile::NamedTempFile;
 
-use valhalla::{Actor, Config, GraphReader};
+use valhalla::{Actor, Config, ConfigBuilder, GraphReader};
 
+/// Small subset of `valhalla::ConfigBuilder` to test building a config from JSON.
 #[derive(Serialize)]
 struct ValhallaConfig {
     mjolnir: MjolnirConfig,
@@ -16,7 +17,6 @@ struct MjolnirConfig {
     traffic_extract: String,
 }
 
-const ANDORRA_CONFIG: &str = "tests/andorra/config.json";
 const ANDORRA_TILES: &str = "tests/andorra/tiles.tar";
 const ANDORRA_TRAFFIC: &str = "tests/andorra/traffic.tar";
 
@@ -88,21 +88,6 @@ fn from_file() {
 }
 
 #[test]
-fn from_full_config() {
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
-    assert!(GraphReader::new(&config).is_ok());
-    assert!(Actor::new(&config).is_ok());
-
-    // Break the path to the tiles in the config so both GraphReader and Actor fail
-    let config_json = std::fs::read_to_string(ANDORRA_CONFIG)
-        .unwrap()
-        .replace(ANDORRA_TILES, "bad_path_to_tile_extract");
-    let config = Config::from_json(&config_json).unwrap();
-    assert!(GraphReader::new(&config).is_err());
-    assert!(Actor::new(&config).is_err());
-}
-
-#[test]
 fn from_json() {
     assert!(Config::from_json("").is_err());
     assert!(Config::from_json("{").is_err());
@@ -128,11 +113,6 @@ fn from_json() {
     };
     let config = Config::from_json(&json::to_string(&config)).unwrap();
     assert!(GraphReader::new(&config).is_ok());
-
-    // full config
-    let json = std::fs::read_to_string(ANDORRA_CONFIG).expect("Failed to read config file");
-    let config = Config::from_json(&json).unwrap();
-    assert!(GraphReader::new(&config).is_ok());
 }
 
 #[test]
@@ -142,4 +122,63 @@ fn from_tile_extract() {
         GraphReader::new(&Config::from_tile_extract("bad_path_to_tile_extract").unwrap()).is_err()
     );
     assert!(GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).is_ok());
+}
+
+#[test]
+fn config_builder() {
+    // Verify defaults match valhalla_build_config
+    let builder = ConfigBuilder::default();
+    assert_eq!(builder.mjolnir.tile_extract, "/data/valhalla/tiles.tar");
+    assert_eq!(
+        builder.mjolnir.traffic_extract,
+        "/data/valhalla/traffic.tar"
+    );
+    assert!(builder.mjolnir.hierarchy);
+    assert!(builder.mjolnir.shortcuts);
+    assert_eq!(builder.mjolnir.max_cache_size, 1000000000);
+    assert!(!builder.loki.actions.is_empty());
+    assert!(!builder.meili.customizable.is_empty());
+
+    // Default paths don't exist, so GraphReader should fail, but config itself is valid
+    let config = builder.build();
+    assert!(GraphReader::new(&config).is_err());
+
+    // bad config
+    let mut builder = ConfigBuilder::default();
+    builder.mjolnir.tile_extract = "bad_path_to_tile_extract".into();
+    builder.mjolnir.traffic_extract = "bad_path_to_traffic_extract".into();
+    let config = builder.build();
+    assert!(GraphReader::new(&config).is_err());
+
+    // tiles only
+    let mut builder = ConfigBuilder::default();
+    builder.mjolnir.tile_extract = ANDORRA_TILES.into();
+    builder.mjolnir.traffic_extract = "bad_path_to_traffic_extract".into();
+    let config = builder.build();
+    assert!(GraphReader::new(&config).is_ok());
+
+    // traffic only
+    let mut builder = ConfigBuilder::default();
+    builder.mjolnir.tile_extract = "bad_path_to_tile_extract".into();
+    builder.mjolnir.traffic_extract = ANDORRA_TRAFFIC.into();
+    let config = builder.build();
+    assert!(GraphReader::new(&config).is_err());
+
+    // tiles and traffic
+    let mut builder = ConfigBuilder::default();
+    builder.mjolnir.tile_extract = ANDORRA_TILES.into();
+    builder.mjolnir.traffic_extract = ANDORRA_TRAFFIC.into();
+    let config = builder.build();
+    assert!(GraphReader::new(&config).is_ok());
+    assert!(Actor::new(&config).is_ok());
+
+    // build() takes &self, so the builder is reusable
+    let config2 = builder.build();
+    assert!(Actor::new(&config2).is_ok());
+
+    // Break the config by pointing to non-existent tiles
+    builder.mjolnir.tile_extract = "bad_path_to_tile_extract".into();
+    let config = builder.build();
+    assert!(GraphReader::new(&config).is_err());
+    assert!(Actor::new(&config).is_err());
 }

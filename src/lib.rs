@@ -8,12 +8,13 @@ use cxx::ExternType;
 use prost::Message;
 
 mod actor;
-mod config;
+pub mod config;
 pub mod proto;
 
 pub use actor::Actor;
 pub use actor::Response;
 pub use config::Config;
+pub use config::ConfigBuilder;
 pub use ffi::AdminInfo;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
@@ -612,9 +613,15 @@ impl GraphReader {
     /// # Examples
     ///
     /// ```
-    /// let Ok(config) = valhalla::Config::from_file("path/to/config.json") else {
-    ///     return; // Handle error appropriately
-    /// };
+    /// let config = valhalla::ConfigBuilder {
+    ///     mjolnir: valhalla::config::Mjolnir {
+    ///         tile_extract: "path/to/tiles.tar".into(),
+    ///         traffic_extract: "path/to/traffic.tar".into(), // optional
+    ///         ..Default::default()
+    ///     },
+    ///     ..Default::default()
+    /// }
+    /// .build();
     /// let reader = valhalla::GraphReader::new(&config);
     /// ```
     pub fn new(config: &Config) -> Result<Self, Error> {

@@ -1,11 +1,17 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
-use valhalla::{Config, GraphId, GraphReader, LiveTraffic};
-
-const ANDORRA_CONFIG: &str = "tests/andorra/config.json";
+use valhalla::{ConfigBuilder, GraphId, GraphReader, LiveTraffic};
 
 fn write_traffic(c: &mut Criterion) {
-    let config = Config::from_file(ANDORRA_CONFIG).unwrap();
+    let config = ConfigBuilder {
+        mjolnir: valhalla::config::Mjolnir {
+            tile_extract: "./tests/andorra/tiles.tar".to_string(),
+            traffic_extract: "./tests/andorra/traffic.tar".to_string(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+    .build();
     let graph_reader = GraphReader::new(&config).unwrap();
 
     // find a tile the the most edges
