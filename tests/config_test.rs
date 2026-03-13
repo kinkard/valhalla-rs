@@ -122,6 +122,7 @@ fn from_tile_extract() {
         GraphReader::new(&Config::from_tile_extract("bad_path_to_tile_extract").unwrap()).is_err()
     );
     assert!(GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).is_ok());
+    assert!(Actor::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).is_ok());
 }
 
 #[test]
