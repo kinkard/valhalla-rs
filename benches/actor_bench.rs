@@ -127,9 +127,10 @@ fn trace_attributes(c: &mut Criterion) {
 
     let shape = "ifadpAyon{A`ClBtAg@~FwKbOwIeAtL[lJt@hDnCtEdB~D|BnDbAj@v@Sr@s@?sAy@gIkA_ICyDh@{Cz@}At@k@fACbAb@j@~@xAvHvHn`@p@pE\\~@t@`@lAoA\\wCo@aRu@uSOoG`@mBr@oAbBw@dBNxA|Bj@|HbDj\\f@lBt@f@fAIr@uCtBaPbCaSj@eD~A{AjCk@nBrBb@jDyJr`AG~DnBzCbChAb@YbAo@bA}FzGmo@pAuHt@iC~AwBhAq@dBIbH~ApCXrBA`Ba@bBz@MvCeB`CeB`A}@f@yDjD}DlEsAlDE|AXrAr@j@|@OnAqAtBmFzAcC|C_@zEg@l@^P~@S|Bo@hA_B|@wBlAmAd@]fBTjCOlJqAbKx@rGFtCN~FcBjIqDxIwBlD?zBGzCg@Rc@^Yl@Ot@Cd@?f@Df@Jb@P^TZVTZLZD\\?ZGXOTSRYN]J_@Fc@|GwAbCG|DCnA@tDf@xCGvI_CfBu@~@i@ZQ|DyBtIeF|BuAdCoERkACoBUoBcBsDyBoCiB_C}@kBuAcEu@aDQw@]uCKsB@qAPkB^cC~@}EdBgGrUih@vAaDjEaJlMqYrMmY|@uA`AiAnDwDtDiDvBiCX[`BoBtDgFjB_ENg@Bk@x@uIb@wG`@eIJyAzAar@^qQ_AsUkCuRy@aGuE}PyDqLyFaJiDiFyMgRsImN_AuAeBsB}ByAkDy@mFe@oEYqF}AsHcDeB{@aA[g@M{Cy@gA[{Bm@{IyBkGaB{EgBmB{@aB}@mCoBgCoB}HaJmSmV}QmUqD{EeDgG}BsFoB{I}@sF_DaYu@yEs@mEs@qCw@eC_DuHeDaIaAaCwEgKkFgL}JkUwHoOqBuDqBuCcB}B_CyBuFeEmDoBwBqA_G_CsFyA_@IoEy@sEk@_DMuAKmBWy@a@w@y@Qq@E}FFW`@eB|@wAbA{@tAc@rBB`DvB~TpNhKtGlSvM|GhEjPlH`NpF";
 
-    c.bench_function("trace attributes json", |b| {
+    c.bench_function("trace attributes edge walk json", |b| {
         let request = proto::Options {
             costing_type: proto::costing::Type::Auto as i32,
+            shape_match: proto::ShapeMatch::EdgeWalk as i32,
             has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
                 shape.into(),
             )),
@@ -141,9 +142,41 @@ fn trace_attributes(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("trace attributes pbf", |b| {
+    c.bench_function("trace attributes edge walk pbf", |b| {
         let request = proto::Options {
             costing_type: proto::costing::Type::Auto as i32,
+            shape_match: proto::ShapeMatch::EdgeWalk as i32,
+            has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
+                shape.into(),
+            )),
+            format: proto::options::Format::Pbf as i32,
+            ..Default::default()
+        };
+        b.iter(|| {
+            let response = actor.trace_attributes(black_box(&request)).unwrap();
+            black_box(response)
+        });
+    });
+
+    c.bench_function("trace attributes map snap json", |b| {
+        let request = proto::Options {
+            costing_type: proto::costing::Type::Auto as i32,
+            shape_match: proto::ShapeMatch::MapSnap as i32,
+            has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
+                shape.into(),
+            )),
+            ..Default::default()
+        };
+        b.iter(|| {
+            let response = actor.trace_attributes(black_box(&request)).unwrap();
+            black_box(response)
+        });
+    });
+
+    c.bench_function("trace attributes map snap pbf", |b| {
+        let request = proto::Options {
+            costing_type: proto::costing::Type::Auto as i32,
+            shape_match: proto::ShapeMatch::MapSnap as i32,
             has_encoded_polyline: Some(proto::options::HasEncodedPolyline::EncodedPolyline(
                 shape.into(),
             )),

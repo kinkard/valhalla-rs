@@ -56,7 +56,6 @@ exclude = [
 # Makes possible to run profilers with `cargo bench`, e.g. `samply record cargo bench`
 [profile.bench]
 debug = "line-tables-only"
-lto = true
 
 [dependencies]
 bitflags = "2"
