@@ -16,7 +16,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     libboost-dev \
-    liblz4-dev \
     libprotobuf-dev \
     protobuf-compiler \
     zlib1g-dev

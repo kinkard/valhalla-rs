@@ -40,7 +40,7 @@ valhalla = "0.6"
 Since Valhalla heavily relies on system libraries, you need to install the following dependencies to build this project:
 
 ```sh
-sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev liblz4-dev libprotobuf-dev protobuf-compiler zlib1g-dev
+sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg-config build-essential cmake libboost-dev libprotobuf-dev protobuf-compiler zlib1g-dev
 ```
 
 See the [Dockerfile](Dockerfile) for a complete reference setup, or the [Valhalla documentation](https://valhalla.github.io/valhalla/building/#platform-specific-builds) for other platforms.

@@ -35,6 +35,7 @@ fn main() {
         .define("ENABLE_PYTHON_BINDINGS", "OFF")
         .define("ENABLE_TESTS", "OFF")
         .define("ENABLE_GEOTIFF", "OFF")
+        .define("ENABLE_LZ4", "OFF") // LZ4 support for elevation tiles for `/height` endpoint
         .define("ENABLE_SINGLE_FILES_WERROR", "OFF")
         .define("CMAKE_UNITY_BUILD", if unity_build { "ON" } else { "OFF" })
         // Rust type system guarantees that `GraphTile` instance will be accessed only from a single thread
