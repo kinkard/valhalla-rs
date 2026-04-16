@@ -4,8 +4,17 @@ use std::path::Path;
 
 fn main() {
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+    
+    // Windows C++ builds should avoid "Debug" to prevent /MDd vs /MD linker conflicts 
+    // with the Rust standard library.
     let build_type = match profile.as_str() {
-        "debug" | "test" => "Debug",
+        "debug" | "test" => {
+            if cfg!(target_os = "windows") {
+                "RelWithDebInfo" // Uses /MD (Release runtime) but keeps debug symbols
+            } else {
+                "Debug"
+            }
+        }
         "release" => {
             if std::env::var("DEBUG").as_deref() == Ok("true") {
                 "RelWithDebInfo"
@@ -13,8 +22,9 @@ fn main() {
                 "Release"
             }
         }
-        _ => "Debug",
-    };    // Unity build speeds up compilation but can complicate debugging and profiling.
+        _ => "RelWithDebInfo",
+    };
+
     // Disable with `UNITY_BUILD=OFF`, e.g. `UNITY_BUILD=OFF cargo bench`
     let mut unity_build = !matches!(std::env::var("UNITY_BUILD").as_deref(), Ok("OFF"));
     if cfg!(target_os = "windows") {
