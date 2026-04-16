@@ -48,6 +48,7 @@ See the [Dockerfile](Dockerfile) for a complete reference setup, or the [Valhall
 ## Windows Development Environment Setup
 
 This section details necessary requirements and system configuration for windows development.
+It should be noted that it has been hard coded for x64-windows.
 
 ### 1\. Toolchain Prerequisites
 
