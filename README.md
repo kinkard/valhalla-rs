@@ -45,8 +45,60 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends clang pkg
 
 See the [Dockerfile](Dockerfile) for a complete reference setup, or the [Valhalla documentation](https://valhalla.github.io/valhalla/building/#platform-specific-builds) for other platforms.
 
+## Windows Development Environment Setup
+
+This section details necessary requirements and system configuration for windows development.
+
+### 1\. Toolchain Prerequisites
+
+The following tools must be installed. For `awk`, use the provided Chocolatey command to ensure compatibility with Valhalla's build scripts.
+
+  * **Visual Studio 2022:** Install the **Desktop development with C++** workload.
+  * **Rust:** Use the `x86_64-pc-windows-msvc` toolchain.
+  * **CMake & Ninja:** Install and add to the system PATH.
+  * **Python 3:** Install for script parsing.
+  * **awk:**
+
+### 2\. Dependency Management (vcpkg)
+
+Run these commands to set up the library dependencies.
+
+```powershell
+# Clone the vcpkg repository
+git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+cd C:\vcpkg
+
+# Bootstrap the vcpkg executable
+.\bootstrap-vcpkg.bat
+
+# Set the VCPKG_ROOT environment variable for the current user (Persistent)
+[System.Environment]::SetEnvironmentVariable("VCPKG_ROOT", "C:\vcpkg", "User")
+
+# Apply the variable to the current session immediately
+$env:VCPKG_ROOT = "C:\vcpkg"
+
+# Install required core libraries for the x64-windows triplet
+# this will take a while
+.\vcpkg install zlib protobuf abseil boost --triplet=x64-windows
+```
+
+Could be good to test with a minimal c++ example and a library such as fmt to establish that vcpkg is actually working.
+
+
+### 3\. Runtime PATH Configuration
+
+The Windows loader requires the location of the `.dll` files at runtime. Run the following command to append the vcpkg binary folders to your User PATH persistently:
+
+```powershell
+$vcpkgBin = "$env:VCPKG_ROOT\installed\x64-windows\bin"
+$vcpkgDebugBin = "$env:VCPKG_ROOT\installed\x64-windows\debug\bin"
+$oldPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+[System.Environment]::SetEnvironmentVariable("Path", "$oldPath;$vcpkgBin;$vcpkgDebugBin", "User")
+```
+
 ## License
 
 This project provides Rust bindings for the Valhalla routing engine and distributes (via [crates.io](https://crates.io/crates/valhalla)) the Valhalla source code. The entire project is licensed under the [MIT License](LICENSE).
 
 The original Valhalla license is available at [valhalla/COPYING](https://github.com/valhalla/valhalla/blob/master/COPYING).
+
