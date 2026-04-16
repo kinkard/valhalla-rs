@@ -1,4 +1,7 @@
+#ifndef UNIQUE_VALHALLA_RS_BRIDGE_GUARD
+#define UNIQUE_VALHALLA_RS_BRIDGE_GUARD
 #pragma once
+
 
 #include <valhalla/baldr/graphtile.h>
 #include <boost/property_tree/ptree_fwd.hpp>
@@ -144,3 +147,4 @@ inline rust::Vec<float> decode_weekly_speeds(rust::Str encoded) {
 
   return speeds;
 }
+#endif

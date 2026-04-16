@@ -1,5 +1,4 @@
-use std::{os::unix::ffi::OsStrExt, path::Path};
-
+use std::path::Path;
 use crate::Error;
 
 #[cxx::bridge]
@@ -69,7 +68,8 @@ impl Config {
     /// ```
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
         Ok(Config(ffi::from_file(
-            path.as_ref().as_os_str().as_bytes(),
+            // path.as_ref().as_os_str().as_bytes(),
+            path.as_ref().to_str().expect("Path must be valid UTF-8").as_bytes(),
         )?))
     }
 
