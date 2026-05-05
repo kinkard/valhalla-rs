@@ -5,14 +5,17 @@ use std::{
 
 use bitflags::bitflags;
 use cxx::ExternType;
+#[cfg(feature = "proto")]
 use prost::Message;
 
+#[cfg(feature = "proto")]
 mod actor;
 pub mod config;
+#[cfg(feature = "proto")]
 pub mod proto;
 
-pub use actor::Actor;
-pub use actor::Response;
+#[cfg(feature = "proto")]
+pub use actor::{Actor, Response};
 pub use config::Config;
 pub use config::ConfigBuilder;
 pub use ffi::AdminInfo;
@@ -407,6 +410,7 @@ mod ffi {
         fn decode_weekly_speeds(encoded: &str) -> Result<Vec<f32>>;
     }
 
+    #[cfg(feature = "proto")]
     unsafe extern "C++" {
         include!("valhalla/src/costing.hpp");
 
@@ -427,7 +431,9 @@ unsafe impl Send for ffi::TileSet {}
 unsafe impl Sync for ffi::TileSet {}
 
 // Safety: All operations do not mutate [`DynamicCost`] inner state.
+#[cfg(feature = "proto")]
 unsafe impl Send for ffi::DynamicCost {}
+#[cfg(feature = "proto")]
 unsafe impl Sync for ffi::DynamicCost {}
 
 /// Identifier of a node or an edge within the tiled, hierarchical graph.
@@ -581,6 +587,7 @@ bitflags! {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LatLon(pub f64, pub f64);
 
+#[cfg(feature = "proto")]
 impl From<LatLon> for proto::LatLng {
     fn from(loc: LatLon) -> Self {
         proto::LatLng {
@@ -591,6 +598,7 @@ impl From<LatLon> for proto::LatLng {
 }
 
 /// Handy wrapper as [`proto::Location`] has optional `ll` field that actually always should be set.
+#[cfg(feature = "proto")]
 impl From<LatLon> for Option<proto::LatLng> {
     fn from(loc: LatLon) -> Self {
         Some(loc.into())
@@ -1157,9 +1165,11 @@ impl TrafficTile {
 /// reused across threads without wrapping it in an [`Arc`].
 ///
 /// [costing model]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-models
+#[cfg(feature = "proto")]
 #[derive(Clone)]
 pub struct CostingModel(cxx::SharedPtr<ffi::DynamicCost>);
 
+#[cfg(feature = "proto")]
 impl CostingModel {
     /// Creates a new costing model of the given type with default options.
     ///

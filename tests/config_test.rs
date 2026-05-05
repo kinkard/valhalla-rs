@@ -3,7 +3,9 @@ use std::{io::Write, path::PathBuf};
 use miniserde::{Serialize, json};
 use tempfile::NamedTempFile;
 
-use valhalla::{Actor, Config, ConfigBuilder, GraphReader};
+#[cfg(feature = "proto")]
+use valhalla::Actor;
+use valhalla::{Config, ConfigBuilder, GraphReader};
 
 /// Small subset of `valhalla::ConfigBuilder` to test building a config from JSON.
 #[derive(Serialize)]
@@ -122,6 +124,7 @@ fn from_tile_extract() {
         GraphReader::new(&Config::from_tile_extract("bad_path_to_tile_extract").unwrap()).is_err()
     );
     assert!(GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).is_ok());
+    #[cfg(feature = "proto")]
     assert!(Actor::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).is_ok());
 }
 
@@ -171,15 +174,19 @@ fn config_builder() {
     builder.mjolnir.traffic_extract = ANDORRA_TRAFFIC.into();
     let config = builder.build();
     assert!(GraphReader::new(&config).is_ok());
+    #[cfg(feature = "proto")]
     assert!(Actor::new(&config).is_ok());
 
     // build() takes &self, so the builder is reusable
     let config2 = builder.build();
+    #[cfg(feature = "proto")]
     assert!(Actor::new(&config2).is_ok());
+    let _ = config2;
 
     // Break the config by pointing to non-existent tiles
     builder.mjolnir.tile_extract = "bad_path_to_tile_extract".into();
     let config = builder.build();
     assert!(GraphReader::new(&config).is_err());
+    #[cfg(feature = "proto")]
     assert!(Actor::new(&config).is_err());
 }

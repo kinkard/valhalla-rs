@@ -58,7 +58,10 @@ fn main() {
     );
 
     // Linking order is important, so valhalla-cxxbridge must come first.
-    cxx_build::bridges(["src/actor.rs", "src/config.rs", "src/lib.rs"])
+    let rust_sources = ["src/config.rs", "src/lib.rs"]
+        .into_iter()
+        .chain(cfg!(feature = "proto").then_some("src/actor.rs"));
+    cxx_build::bridges(rust_sources)
         .file("src/libvalhalla.cpp")
         .std("c++20")
         .includes(valhalla_includes)
@@ -86,15 +89,17 @@ fn main() {
         panic!("Failed to link libvalhalla: {err}\nlibvalhalla.pc:\n{pc_content}");
     }
 
-    // protos
-    let proto_files: Vec<_> = fs::read_dir("valhalla/proto/descriptors")
-        .expect("Failed to read valhalla/proto/descriptors directory")
-        .map(|entry| entry.expect("Bad fs entry").path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "proto"))
-        .collect();
-    prost_build::compile_protos(&proto_files, &["valhalla/proto/descriptors/"])
-        .expect("Failed to compile proto files");
-    println!("cargo:rerun-if-changed=valhalla/proto/descriptors");
+    #[cfg(feature = "proto")]
+    {
+        let proto_files: Vec<_> = fs::read_dir("valhalla/proto/descriptors")
+            .expect("Failed to read valhalla/proto/descriptors directory")
+            .map(|entry| entry.expect("Bad fs entry").path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "proto"))
+            .collect();
+        prost_build::compile_protos(&proto_files, &["valhalla/proto/descriptors/"])
+            .expect("Failed to compile proto files");
+        println!("cargo:rerun-if-changed=valhalla/proto/descriptors");
+    }
 
     // Generate `config_builder.rs` — typed Rust structs mirroring Valhalla's Python-defined config,
     // with doc comments and `write_to_ptree` methods that populate C++ `boost::property_tree`

@@ -1,3 +1,5 @@
+#![cfg(feature = "proto")]
+
 use valhalla::{
     Actor, ConfigBuilder, Error, LatLon, Response,
     proto::{self, options::Format},

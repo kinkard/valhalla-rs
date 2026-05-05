@@ -1,3 +1,5 @@
+#![cfg(feature = "proto")]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use valhalla::{Actor, ConfigBuilder, LatLon, proto};

@@ -1,3 +1,5 @@
+#![cfg(feature = "proto")]
+
 use pretty_assertions::assert_eq;
 use std::collections::{HashMap, VecDeque};
 

@@ -1,7 +1,7 @@
 [package]
 name = "valhalla"
 
-version = "0.6.37"
+version = "0.6.38"
 edition = "2024"
 rust-version = "1.87"
 description = "Rust bindings for Valhalla routing engine"
@@ -58,18 +58,23 @@ exclude = [
 [profile.bench]
 debug = "line-tables-only"
 
+[features]
+default = ["proto"]
+# Enables Valhalla's Actor API and `proto` module with Valhalla's protobuf types.
+proto = ["dep:prost", "dep:prost-build"]
+
 [dependencies]
 bitflags = "2"
 # Lock to specific version to avoid accidentally upgrading to a version that somehow breaks compatibility.
 cxx = { version = "=1.0.194", features = ["c++20"] }
-prost = "0.14"
+prost = { version = "0.14", optional = true }
 
 [build-dependencies]
 cmake = "0.1"
 cxx-build = "=1.0.194"
 miniserde = "0.1"    # For compile_commands.json parsing
 pkg-config = "0.3"
-prost-build = "0.14"
+prost-build = { version = "0.14", optional = true }
 
 [dev-dependencies]
 miniserde = "0.1"
@@ -80,6 +85,7 @@ criterion = { version = "0.7", default-features = false }
 [[bench]]
 name = "actor_bench"
 harness = false
+required-features = ["proto"]
 
 [[bench]]
 name = "tiles_bench"
