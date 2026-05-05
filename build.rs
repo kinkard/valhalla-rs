@@ -87,14 +87,14 @@ fn main() {
     }
 
     // protos
-    let proto_files: Vec<_> = fs::read_dir("valhalla/proto")
-        .expect("Failed to read valhalla/proto directory")
+    let proto_files: Vec<_> = fs::read_dir("valhalla/proto/descriptors")
+        .expect("Failed to read valhalla/proto/descriptors directory")
         .map(|entry| entry.expect("Bad fs entry").path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "proto"))
         .collect();
-    prost_build::compile_protos(&proto_files, &["valhalla/proto/"])
+    prost_build::compile_protos(&proto_files, &["valhalla/proto/descriptors/"])
         .expect("Failed to compile proto files");
-    println!("cargo:rerun-if-changed=valhalla/proto");
+    println!("cargo:rerun-if-changed=valhalla/proto/descriptors");
 
     // Generate `config_builder.rs` — typed Rust structs mirroring Valhalla's Python-defined config,
     // with doc comments and `write_to_ptree` methods that populate C++ `boost::property_tree`

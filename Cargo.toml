@@ -1,7 +1,7 @@
 [package]
 name = "valhalla"
 
-version = "0.6.36"
+version = "0.6.37"
 edition = "2024"
 rust-version = "1.87"
 description = "Rust bindings for Valhalla routing engine"
@@ -26,6 +26,7 @@ exclude = [
     "**/benchmarks/*",
     "**/example/*",
     "**/examples/*",
+    "**/package-lock.json",
 
     "valhalla/docker",
     "valhalla/run_route_scripts",
