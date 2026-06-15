@@ -40,7 +40,7 @@ fn main() {
         .define("CMAKE_UNITY_BUILD", if unity_build { "ON" } else { "OFF" })
         // Valhalla's codebase is not designed for unity builds, so at some batch sizes duplicated symbols might
         // appear within the same unit. Adjust this number if regular Valhalla update causes build errors.
-        .define("CMAKE_UNITY_BUILD_BATCH_SIZE", "7")
+        .define("CMAKE_UNITY_BUILD_BATCH_SIZE", "11")
         // Rust type system guarantees that `GraphTile` instance will be accessed only from a single thread
         .define("ENABLE_THREAD_SAFE_TILE_REF_COUNT", "OFF")
         .define("LOGGING_LEVEL", "WARN") // todo: Provide an API for setting custom loggers to Valhalla
