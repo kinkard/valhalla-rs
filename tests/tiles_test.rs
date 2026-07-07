@@ -241,8 +241,7 @@ fn edges_in_tile() {
             assert_eq!(de.free_flow_speed(), 0);
             assert_eq!(de.constrained_flow_speed(), 0);
             assert_ne!(de.speed(), 0, "Default edge's speed should never be zero");
-            assert_eq!(tile.live_speed(de), None);
-            assert_eq!(tile.edge_closed(de), false);
+            assert_eq!(tile.live_traffic(de).speed(), None);
             assert_eq!(
                 tile.edge_speed(de, valhalla::SpeedSources::ALL, false, 0, 0),
                 (de.speed(), valhalla::SpeedSources::NO_FLOW)
@@ -267,6 +266,48 @@ fn edges_in_tile() {
             }
         }
         assert!(tile.directededge(slice.len() as u32).is_none());
+    }
+}
+
+/// When no traffic tile is loaded at all, the C++ shim must return the static `INVALID_SPEED`
+/// record *faithfully* - overall + all three subsegment speeds == 127, breakpoints == 0 (raw bits
+/// `0x0FFF_FFFF`) - NOT a normalized `0`. Normalizing to 0 would silently drop the high bits
+/// (`has_incidents`/`spare`) that the format permits on an invalid-speed edge. Both patterns decode
+/// to `speed() == None`, so a `return 0` regression would be invisible to a `speed()`-only
+/// assertion; this pins the raw bits. See `INVALID_SPEED` in `valhalla/baldr/traffictile.h`.
+#[test]
+fn live_traffic_invalid_speed_bits_when_no_traffic_loaded() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            // A non-existent traffic extract -> no traffic tile is loaded -> trafficspeed() yields
+            // the static INVALID_SPEED sentinel rather than a stored (all-zero) record.
+            traffic_extract: "tests/andorra/does-not-exist.tar".into(),
+        },
+    };
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+
+    // Sanity: with no traffic loaded, there is no traffic tile to read.
+    for tile_id in reader.tiles() {
+        assert!(
+            reader.traffic_tile(tile_id).is_none(),
+            "no traffic tile should be loaded without a valid traffic extract"
+        );
+    }
+
+    let tile_id = reader.tiles()[0];
+    let tile = reader.graph_tile(tile_id).unwrap();
+    let edges = tile.directededges();
+    assert!(!edges.is_empty());
+    for de in edges {
+        let live = tile.live_traffic(de);
+        assert_eq!(live.speed(), None);
+        assert_eq!(
+            live.to_bits(),
+            0x0FFF_FFFF,
+            "no-traffic edge must carry the C++ INVALID_SPEED raw bits, not 0"
+        );
     }
 }
 
@@ -421,32 +462,66 @@ fn live_traffic() {
             traffic_tile.edge_traffic(edge_id),
             Some(LiveTraffic::UNKNOWN)
         );
-        assert_eq!(tile.live_speed(edge), None);
+        assert_eq!(tile.live_traffic(edge).speed(), None);
 
         traffic_tile.write_edge_traffic(edge_id, LiveTraffic::CLOSED);
-        assert_eq!(tile.live_speed(edge), Some(0));
+        assert_eq!(tile.live_traffic(edge).speed(), Some(0)); // Some(0) = closed
+
+        // deprecated shims stay equivalent to `live_traffic(de).speed()`
+        #[allow(deprecated)]
+        {
+            assert_eq!(tile.live_speed(edge), Some(0));
+            assert!(tile.edge_closed(edge));
+        }
 
         traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(72));
-        assert_eq!(tile.live_speed(edge), Some(72));
+        assert_eq!(tile.live_traffic(edge).speed(), Some(72));
 
         // speed is stored with 2km/h precision
         traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(73));
-        assert_eq!(tile.live_speed(edge), Some(72));
+        assert_eq!(tile.live_traffic(edge).speed(), Some(72));
 
         // spare bit changes nothing
         traffic_tile.write_edge_traffic(
             edge_id,
             LiveTraffic::from_uniform_speed(72).with_spare(true),
         );
-        assert_eq!(tile.live_speed(edge), Some(72));
-        assert!(traffic_tile.edge_traffic(edge_id).unwrap().spare());
+        assert_eq!(tile.live_traffic(edge).speed(), Some(72));
+        assert!(tile.live_traffic(edge).spare());
 
-        // Only "overall speed" is used by `live_speed()`. However, segmented speeds are accessible via `/locate`
+        // Only "overall speed" affects `speed()`. Per-segment detail is readable via `segments()`.
         traffic_tile.write_edge_traffic(
             edge_id,
             LiveTraffic::from_segmented_speeds(72, [1, 2, 3], [127, 128]),
         );
-        assert_eq!(tile.live_speed(edge), Some(72));
+        let live = tile.live_traffic(edge);
+        assert_eq!(live.speed(), Some(72));
+        let segments: Vec<_> = live.segments().collect();
+        assert_eq!(segments.len(), 3);
+        // encoded speeds are stored with 2km/h precision (value >> 1 on write, << 1 on read);
+        // 1 km/h rounds down to encoded 0, which reads back as a closed segment (Some(0)).
+        assert_eq!(segments[0].speed, Some(0));
+        assert_eq!(segments[1].speed, Some(2));
+        assert_eq!(segments[2].speed, Some(2));
+        // breakpoints [127, 128] become contiguous fractional ranges ending at 1.0.
+        assert_eq!(segments[0].range, (0.0, 127.0 / 255.0));
+        assert_eq!(segments[1].range, (127.0 / 255.0, 128.0 / 255.0));
+        assert_eq!(segments[2].range, (128.0 / 255.0, 1.0));
+
+        // congestion / has_incidents / spare round-trip through the real GraphTile accessor
+        let record = LiveTraffic::from_segmented_speeds(72, [60, 80, 100], [100, 200])
+            .with_congestion([Some(0.0), Some(0.5), None])
+            .with_incidents(true)
+            .with_spare(true);
+        traffic_tile.write_edge_traffic(edge_id, record);
+        let live = tile.live_traffic(edge);
+        let congestion: Vec<_> = live.segments().map(|segment| segment.congestion).collect();
+        assert_eq!(congestion.len(), 3);
+        assert_eq!(congestion[0], Some(0.0));
+        assert!((congestion[1].unwrap() - 0.5).abs() < 0.02);
+        assert_eq!(congestion[2], None);
+        assert!(live.has_incidents());
+        assert!(live.spare());
     }
 }
 
@@ -512,6 +587,21 @@ fn wrong_tile_edgeinfo() {
 
     let de = t2.directededge(0).unwrap();
     let _ = t1.edgeinfo(de); // should panic
+}
+
+#[test]
+#[should_panic = "Wrong tile"]
+fn wrong_tile_live_traffic() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap())
+        .expect("Failed to create GraphReader");
+
+    let tiles = reader.tiles();
+    assert!(tiles.len() >= 2, "This test requires at least two tiles");
+    let t1 = reader.graph_tile(tiles[0]).unwrap();
+    let t2 = reader.graph_tile(tiles[1]).unwrap();
+
+    let de = t2.directededge(0).unwrap();
+    let _ = t1.live_traffic(de); // should panic
 }
 
 #[test]

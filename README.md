@@ -9,9 +9,9 @@ C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) Routin
 Features:
 
 - [x] **Tile access**: Read Valhalla tiles and access road graph edges (`DirectedEdge`, `EdgeInfo`) and nodes (`NodeInfo`) - see [tiles_tests](tests/tiles_test.rs) for examples
-- [x] **Live traffic**: Write live traffic information directly to memory-mapped traffic.tar - see [tiles_tests](tests/tiles_test.rs) for examples
+- [x] **Live traffic**: Read and write live traffic directly on a memory-mapped traffic.tar via a fully round-trippable typed API. Read a record's overall speed (`speed() -> Option<u8>`, with `Some(0)` = closed) plus per-segment speeds and congestion via `segments()` (an iterator of `TrafficSegment`s), and the incidents/spare bits; write any of them back. See the runnable [traffic_debug](examples/traffic_debug.rs) CLI for a worked example covering scan / inspect / set-speed / close / reset / clear
 - [x] **Actor API**: Route building and routing operations similar to [Valhalla's Python bindings](https://github.com/valhalla/valhalla/blob/master/src/bindings/python/examples/actor_examples.ipynb) - see [actor_tests](tests/actor_test.rs) for examples
-- [x] **Typed configuration**: `valhalla::ConfigBuilder` provides a typed Rust API with all of Valhalla's defaults — no Python, no JSON files needed - see [config_tests](tests/config_test.rs) for examples
+- [x] **Typed configuration**: `valhalla::ConfigBuilder` provides a typed Rust API with all of Valhalla's defaults - no Python, no JSON files needed - see [config_tests](tests/config_test.rs) for examples
 
 TODOs:
 
@@ -34,6 +34,8 @@ Run `cargo add valhalla` or add this to your Cargo.toml:
 [dependencies]
 valhalla = "0.6"
 ```
+
+See [examples/README.md](examples/README.md) for runnable examples.
 
 ## Dependencies
 

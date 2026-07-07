@@ -102,8 +102,8 @@ LatLon node_latlon(const valhalla::baldr::GraphTile& tile, const valhalla::baldr
 /// Helper function that workarounds the inability to use `baldr::EdgeInfo` in Rust
 EdgeInfo edgeinfo(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
 
-/// Helper method that returns 0 if the edge is closed, 255 if live speed in unknown and speed in km/h otherwise
-uint8_t live_speed(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
+/// Helper method that returns the raw `TrafficSpeed` bits for the edge's live traffic record
+uint64_t live_traffic(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
 
 /// Helper function to get admin info for a given index
 AdminInfo admininfo(const valhalla::baldr::GraphTile& tile, uint32_t index);

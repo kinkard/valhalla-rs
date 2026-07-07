@@ -1,7 +1,7 @@
 [package]
 name = "valhalla"
 
-version = "0.6.40"
+version = "0.6.41"
 edition = "2024"
 rust-version = "1.87"
 description = "Rust bindings for Valhalla routing engine"
@@ -88,6 +88,13 @@ miniserde = "0.1"
 pretty_assertions = "1"
 tempfile = { version = "3", default-features = false }
 criterion = { version = "0.7", default-features = false }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+
+# Make the example's unit tests part of plain `cargo test` (examples are not tested by default).
+[[example]]
+name = "traffic_debug"
+test = true
 
 [[bench]]
 name = "actor_bench"

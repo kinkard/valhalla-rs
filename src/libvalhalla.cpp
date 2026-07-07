@@ -153,15 +153,12 @@ EdgeInfo edgeinfo(const baldr::GraphTile& tile, const baldr::DirectedEdge& de) {
   };
 }
 
-uint8_t live_speed(const baldr::GraphTile& tile, const baldr::DirectedEdge& de) {
-  const volatile auto& live_speed_data = tile.trafficspeed(&de);
-  if (!live_speed_data.speed_valid()) {
-    return 255;  // No valid live speed data
-  }
-  if (live_speed_data.closed()) {
-    return 0;  // Edge is closed
-  }
-  return live_speed_data.get_overall_speed();
+uint64_t live_traffic(const baldr::GraphTile& tile, const baldr::DirectedEdge& de) {
+  static_assert(sizeof(baldr::TrafficSpeed) == sizeof(uint64_t), "TrafficSpeed must be a single u64");
+  // trafficspeed() throws if `de` is out of tile bounds - guarded by the Rust-side `debug_assert!`
+  // ("Wrong tile") and load-time tile validation.
+  const volatile baldr::TrafficSpeed& ts = tile.trafficspeed(&de);
+  return *reinterpret_cast<const volatile uint64_t*>(&ts);
 }
 
 AdminInfo admininfo(const baldr::GraphTile& tile, uint32_t index) {
