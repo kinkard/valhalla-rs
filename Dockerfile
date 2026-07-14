@@ -31,13 +31,15 @@ WORKDIR /usr/src/app
 COPY . .
 
 # Check formatting before building to avoid unnecessary rebuilds
-RUN cargo fmt --all -- --check
+RUN cargo fmt --all --check
+RUN cargo fmt --all --check --manifest-path examples/Cargo.toml
 
 RUN cargo clippy -- -Dwarnings
-
 RUN cargo test
-
 RUN cargo build --release
+
+RUN cargo clippy --manifest-path examples/Cargo.toml -- -Dwarnings
+RUN cargo test --manifest-path examples/Cargo.toml
 
 # Multi-stage build example:
 # ```

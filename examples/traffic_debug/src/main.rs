@@ -8,8 +8,8 @@
 //!   reset      - revert one edge to UNKNOWN (per-edge; tile last_update untouched)
 //!   clear      - zero all edges in a tile via `TrafficTile::clear_traffic`
 //!
-//! Run with:
-//!   cargo run --example traffic_debug -- \
+//! Run from the `examples/` workspace:
+//!   cargo run -p traffic_debug -- \
 //!     --tile-extract path/to/tiles.tar \
 //!     --traffic-extract path/to/traffic.tar \
 //!     scan
