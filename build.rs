@@ -600,7 +600,7 @@ const CONFIG_BUILDER_IMPL: &str = r#"impl ConfigBuilder {
     pub fn build(&self) -> Config {
         let mut pt = ffi::ptree_new();
         self.write_to_ptree(pt.pin_mut(), "");
-        Config(pt)
+        Config::new(pt)
     }
 }
 

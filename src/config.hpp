@@ -1,6 +1,7 @@
 #pragma once
 
 #include <valhalla/baldr/rapidjson_utils.h>
+#include <valhalla/midgard/logging.h>
 #include <boost/property_tree/ptree.hpp>
 
 #include "rust/cxx.h"
@@ -73,4 +74,11 @@ inline void ptree_put_int_array(boost::property_tree::ptree& pt, rust::Str path,
     children.push_back({"", child});
   }
   pt.put_child(std::string(path.data(), path.size()), children);
+}
+
+/// Initialize Valhalla's logger with the given config.
+inline void configure_logging(const boost::property_tree::ptree& pt) {
+  if (pt.get_child_optional("logging")) {
+    valhalla::midgard::logging::ConfigureFromPtree(pt);
+  }
 }

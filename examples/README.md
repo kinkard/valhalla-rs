@@ -1,41 +1,37 @@
 # Examples
 
-Runnable examples for `valhalla-rs`. Each example is set up as its own crate so its dependencies are clear.
-
-Run any of them **from this `examples/` directory** with `cargo run -p <name>`:
-
-## traffic_debug
-
-A CLI for inspecting and manipulating a live `traffic.tar`, memory-mapped through a `GraphReader`.
-Read it if you want to see the `LiveTraffic` read+write API in real use - decoding edge speeds and
-per-segment detail (`speed()`, `segments()`), and writing records back (`from_uniform_speed`,
-`with_congestion` / `with_incidents` / `with_spare`, `TrafficTile::write_edge_traffic`) - with no
-hand-decoding of the raw `u64` bitfield anywhere.
-
-Subcommands: `scan`, `inspect`, `set-speed`, `close`, `reset`, `clear` - see `--help` for details.
+Each example is an independent crate, so its dependencies are clear. Run from this `examples/`
+directory; every example documents its own arguments:
 
 ```sh
-cargo run -p traffic_debug -- \
-    --tile-extract path/to/tiles.tar \
-    --traffic-extract path/to/traffic.tar \
-    scan
+cargo run -p <example> -- --help
 ```
 
-## valhalla-service
+| Example | Demonstrates | Key APIs |
+|---|---|---|
+| [ferry-lines](ferry-lines/src/main.rs) | scan a whole tileset in parallel, stitch routes across tiles, name places without a geocoder | `GraphReader::tiles`, `edgeinfo`, `opp_index`, `admin_info`, `TimeZoneInfo` |
+| [reachability](reachability/src/main.rs) | snap a coordinate the way the router does, then run your own search under Valhalla's access rules | `Actor::locate`, `CostingModel`, `node_transitions` |
+| [isochrone-h3](isochrone-h3/src/main.rs) | budget-limited expansion with hierarchy limits, drawn as H3 hexagons | `CostingModel`, `node_transitions`, `GraphLevel` |
+| [match-polyline](match-polyline/src/main.rs) | map-match with typed protobuf, then ask the tiles what the response left out | `Actor::trace_attributes`, `proto::Options`, `live_traffic`, `edge_speed` |
+| [traffic_debug](traffic_debug/src/main.rs) | read and write a live `traffic.tar` through a typed API | `LiveTraffic`, `TrafficTile`, `ConfigBuilder` |
+| [valhalla-service](valhalla-service/src/main.rs) | Rust version of Valhalla's [`valhalla_service`](https://github.com/valhalla/valhalla/blob/master/src/valhalla_service.cc) with Actor API over HTTP, JSON and protobuf | `Actor`, all Valhalla endpoints |
 
-Rust version of Valhalla's [`valhalla_service`](https://github.com/valhalla/valhalla/blob/master/src/valhalla_service.cc) that exposes the Actor API over HTTP.
-Supports all [Valhalla endpoints](https://valhalla.github.io/valhalla/api/) (`/route`, `/matrix`, `/isochrone`, ...) and both JSON and protobuf request and response formats.
+## Two Dijkstras, one graph
 
-```sh
-cargo run -p valhalla-service --release -- path/to/valhalla.json --port 3000 --concurrency 8
-```
+`GraphReader` gives you the road graph and `CostingModel` gives you Valhalla's access rules for it — the
+algorithm in between is yours. `reachability` and `isochrone-h3` are two searches over the same tiles that
+differ on every axis that matters:
 
-- `valhalla.json` - a standard Valhalla config (see `valhalla::ConfigBuilder` or `valhalla_build_config`), pointing at your tile extract.
-- `--port` - listen port (default `3000`).
-- `--concurrency` - number of worker threads / `Actor` instances (defaults to the number of available CPUs).
+| | `reachability` | `isochrone-h3` |
+|---|---|---|
+| queue cost | path length | path duration |
+| queue item | bare `GraphId` | label carrying path length + budget |
+| hierarchy limits | none — bounded at 1.5–10 km | the point of the example |
+| stops on | a stop condition | an exhausted budget |
+| tile cache | shared across three searches | fused with the visited set |
 
-```sh
-curl -s http://localhost:3000/route \
-  -H 'content-type: application/json' \
-  -d '{"locations":[{"lat":52.52,"lon":13.40},{"lat":52.50,"lon":13.45}],"costing":"auto"}'
-```
+The visited set is a bitset per tile rather than a `HashSet<GraphId>` which is much smaller and faster.
+
+Neither honours turn restrictions — both label **nodes**, and a node label cannot record which edge you arrived
+on. Valhalla's own path algorithms label edges for that reason. Fine for reachability and coverage questions;
+not what you'd build a router on.

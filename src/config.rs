@@ -19,6 +19,9 @@ pub(crate) mod ffi {
         fn ptree_put_float(pt: Pin<&mut ptree>, path: &str, value: f64);
         fn ptree_put_str_array(pt: Pin<&mut ptree>, path: &str, values: &[String]);
         fn ptree_put_int_array(pt: Pin<&mut ptree>, path: &str, values: &[i64]);
+
+        /// Applies the config's `logging` section to Valhalla's logger.
+        fn configure_logging(pt: &ptree);
     }
 }
 
@@ -68,7 +71,7 @@ impl Config {
     /// let config = valhalla::Config::from_file("path/to/config.json");
     /// ```
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
-        Ok(Config(ffi::from_file(
+        Ok(Config::new(ffi::from_file(
             path.as_ref().as_os_str().as_bytes(),
         )?))
     }
@@ -85,7 +88,7 @@ impl Config {
     /// let config = valhalla::Config::from_json(&json);
     /// ```
     pub fn from_json(config: &str) -> Result<Self, Error> {
-        Ok(Config(ffi::from_json(config)?))
+        Ok(Config::new(ffi::from_json(config)?))
     }
 
     /// Creates a new Valhalla configuration from path to the tiles tar extract.
@@ -108,6 +111,12 @@ impl Config {
         }
         .build();
         Ok(config)
+    }
+
+    pub(crate) fn new(pt: cxx::UniquePtr<ffi::ptree>) -> Self {
+        // Valhalla has static global state for logging so this is the earliest we can call it. No-op for subsequent calls.
+        ffi::configure_logging(pt.as_ref().unwrap());
+        Config(pt)
     }
 
     /// Reference to the inner Valhalla configuration object.
