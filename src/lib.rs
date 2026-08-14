@@ -544,6 +544,12 @@ impl From<cxx::Exception> for Error {
 
 bitflags! {
     /// Access bit field constants. Access in directed edge allows 12 bits.
+    ///
+    /// Valhalla's [costing models] decide accessibility with these bits: a travel mode may use an
+    /// edge or a node if any of its bits is set in [`DirectedEdge::forwardaccess()`] or
+    /// [`NodeInfo::access()`].
+    ///
+    /// [costing models]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-models
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Access: u16 {
         const AUTO = 1;
@@ -553,6 +559,7 @@ bitflags! {
         const EMERGENCY = 16;
         const TAXI = 32;
         const BUS = 64;
+        /// High-Occupancy Vehicle, i.e. carpool lanes marked via `hov=designated` or similar tags.
         const HOV = 128;
         const WHEELCHAIR = 256;
         const MOPED = 512;
@@ -1338,29 +1345,40 @@ impl TrafficTile {
     }
 }
 
-/// A [costing model] that evaluates edge traversal costs and accessibility for different travel modes
-/// (auto, bicycle, pedestrian, etc.).
+/// A [costing model] that decides which edges and nodes a travel mode may use.
 ///
-/// `CostingModel` wraps Valhalla's dynamic costing algorithms to determine whether edges and nodes
-/// are accessible for a given travel mode, and to calculate the cost of traversing edges and
-/// making turns at intersections. This enables graph traversal operations such as reachability
-/// analysis, accessibility checking, and custom routing logic.
+/// # Deprecated
 ///
-/// As `CostingModel` already uses shared ownership internally, cloning is cheap and it can be
-/// reused across threads without wrapping it in an [`Arc`].
+/// Both checks it exposes are plain [`Access`] bit tests, and the options given here skip
+/// Valhalla's own defaults: unset fields stay at protobuf zero, so `truck` also accepts `AUTO`
+/// edges. See [`Access`] for the bits every other costing uses.
+///
+/// | Deprecated | Replacement for `auto` |
+/// |---|---|
+/// | `costing.node_accessible(node)` | `node.access().intersects(Access::AUTO \| Access::HOV)` |
+/// | `costing.edge_accessible(edge)` | `edge.forwardaccess().intersects(Access::AUTO \| Access::HOV)` |
+///
+/// Edge costs, turn costs, restrictions and closures were never exposed and would drag in a large
+/// part of Valhalla's internals - use the [`Actor`] API for those.
 ///
 /// [costing model]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-models
 #[cfg(feature = "proto")]
+#[deprecated(
+    since = "0.6.43",
+    note = "use `Access` bits from `DirectedEdge::forwardaccess()` and `NodeInfo::access()` instead"
+)]
 #[derive(Clone)]
 pub struct CostingModel(cxx::SharedPtr<ffi::DynamicCost>);
 
 #[cfg(feature = "proto")]
+#[allow(deprecated)]
 impl CostingModel {
     /// Creates a new costing model of the given type with default options.
     ///
     /// # Examples
     ///
     /// ```
+    /// # #![allow(deprecated)]
     /// use valhalla::{CostingModel, proto};
     ///
     /// let cost_model = CostingModel::new(proto::costing::Type::Auto).unwrap();
@@ -1381,6 +1399,7 @@ impl CostingModel {
     /// # Examples
     ///
     /// ```
+    /// # #![allow(deprecated)]
     /// use valhalla::{CostingModel, proto};
     ///
     /// let cost_model = CostingModel::with_options(&proto::Costing {

@@ -2,7 +2,6 @@
 //!
 //! Demonstrates:
 //!   - `Actor::locate` snaps a coordinate the way the routing engine does
-//!   - `CostingModel` applies Valhalla's access rules to your own algorithm
 //!   - `Exhausted` is an answer: the reachable subgraph ran out
 //!   - labels nodes, not edges, so turn restrictions are not honoured
 //!
@@ -17,9 +16,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use serde::Serialize;
-use valhalla::{
-    Actor, CostingModel, DirectedEdge, GraphReader, LatLon, NodeInfo, RoadClass, proto,
-};
+use valhalla::{Access, Actor, DirectedEdge, GraphReader, LatLon, NodeInfo, RoadClass};
 
 use crate::dijkstra::{CachedGraphReader, SearchResult};
 
@@ -100,11 +97,9 @@ fn analyse(
     // Snap like the router does; the search starts at the far end of the snapped edge.
     let edges = locate::locate(actor, coordinate, locate_radius)?;
 
-    // `exclude_tolls` is no help here: it is a cost multiplier and `edge_accessible` ignores cost.
-    let costing = CostingModel::new(proto::costing::Type::Auto)
-        .map_err(|e| anyhow!("failed to build costing model: {e}"))?;
-    let node_filter = |node: &NodeInfo| costing.node_accessible(node);
-    let edge_filter = |edge: &DirectedEdge| costing.edge_accessible(edge);
+    let node_filter = |node: &NodeInfo| node.access().intersects(Access::AUTO);
+    let edge_filter = |edge: &DirectedEdge| edge.forwardaccess().intersects(Access::AUTO);
+    // Hand-rolled, as Valhalla's `exclude_tolls` only penalises tolls.
     let toll_free = |edge: &DirectedEdge| edge_filter(edge) && !edge.toll();
     // `RoadClass` is ordered by importance: below primary is motorway and trunk.
     let is_highway = |edge: &DirectedEdge| edge.road_class() < RoadClass::kPrimary;

@@ -110,7 +110,7 @@ fn ferry_routes(reader: &GraphReader) -> Vec<FerryRoute> {
                 .filter(|e| is_ferry_edge(e))
                 // Shortcuts carry no OSM way (`way_id == 0`).
                 .filter(|e| !e.is_shortcut())
-                .filter(|e| e.forwardaccess().contains(Access::AUTO))
+                .filter(|e| e.forwardaccess().intersects(Access::AUTO))
                 .filter_map(|edge| resolve_ferry_route(reader, &tile, edge))
                 .collect::<Vec<_>>()
         })
@@ -138,7 +138,7 @@ fn resolve_ferry_route(
 
     // Only start from a landing: the first edge must be reachable *from* land by car.
     if !any_node_edge(reader, begin_tile, begin_node, |de| {
-        !is_ferry_edge(de) && de.reverseaccess().contains(Access::AUTO)
+        !is_ferry_edge(de) && de.reverseaccess().intersects(Access::AUTO)
     }) {
         return None;
     }
@@ -157,7 +157,7 @@ fn resolve_ferry_route(
 
         // Check for land *before* another ferry edge: some ways loop through several landings.
         if any_node_edge(reader, &end_tile, end_node, |de| {
-            !is_ferry_edge(de) && de.forwardaccess().contains(Access::AUTO)
+            !is_ferry_edge(de) && de.forwardaccess().intersects(Access::AUTO)
         }) {
             return Some(FerryRoute {
                 way_id,

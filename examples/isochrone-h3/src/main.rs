@@ -4,7 +4,6 @@
 //!   - hierarchy limits: dropping the local road level once far from the origin
 //!   - queue cost, `path_length_m` and remaining budget as three distinct per-node quantities
 //!   - one hash map as both tile cache and visited set
-//!   - `CostingModel` supplying Valhalla's access rules to a hand-written traversal
 //!
 //! Labels nodes rather than edges, so turn restrictions are not honoured.
 //!
@@ -20,7 +19,7 @@ use clap::Parser;
 use h3o::{CellIndex, LatLng, Resolution};
 use rustc_hash::FxHashMap;
 use serde::{Serialize, Serializer, ser::SerializeSeq};
-use valhalla::{Actor, CostingModel, DirectedEdge, GraphId, GraphReader, GraphTile, LatLon, proto};
+use valhalla::{Access, Actor, DirectedEdge, GraphId, GraphReader, GraphTile, LatLon};
 
 use crate::{bitset::BitSet, priority_queue::PriorityQueue};
 
@@ -165,7 +164,7 @@ fn main() -> Result<()> {
         GraphReader::new(&config).map_err(|e| anyhow!("failed to open GraphReader: {e}"))?;
 
     let origins = locate::locate(&mut actor, cli.coordinate, cli.locate_radius)?;
-    let (cells, gates) = expand(&reader, &origins, &cli, resolution, HIERARCHY_LIMITS)?;
+    let (cells, gates) = expand(&reader, &origins, &cli, resolution, HIERARCHY_LIMITS);
     // To stderr, so it does not land in the GeoJSON.
     eprintln!(
         "hierarchy limits turned away {} nodes and {} level transitions",
@@ -195,12 +194,10 @@ fn expand(
     cli: &Cli,
     resolution: Resolution,
     limits: [u32; 3],
-) -> Result<(FxHashMap<CellIndex, u32>, GateStats)> {
+) -> (FxHashMap<CellIndex, u32>, GateStats) {
     let mut gates = GateStats::default();
-    let costing = CostingModel::new(proto::costing::Type::Auto)
-        .map_err(|e| anyhow!("failed to build costing model: {e}"))?;
     let allowed = |edge: &DirectedEdge| {
-        costing.edge_accessible(edge)
+        edge.forwardaccess().intersects(Access::AUTO)
             // Shortcuts summarise the edges beneath them; following both duplicates work.
             && !edge.is_shortcut()
             && !(cli.avoid_tolls && edge.toll())
@@ -266,7 +263,7 @@ fn expand(
         let Some(node) = tile.node(label.id.id()) else {
             continue;
         };
-        if !costing.node_accessible(node) {
+        if !node.access().intersects(Access::AUTO) {
             continue;
         }
 
@@ -325,7 +322,7 @@ fn expand(
         }
     }
 
-    Ok((cells, gates))
+    (cells, gates)
 }
 
 /// How often each hierarchy gate turned a node away.

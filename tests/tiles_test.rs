@@ -356,7 +356,7 @@ fn nodes_in_tile() {
             // This tileset has no elevation data
             assert_eq!(node.elevation(), -500.0);
 
-            if !node.access().contains(Access::AUTO) {
+            if !node.access().intersects(Access::AUTO) {
                 no_auto_access_count += 1;
             }
         }
