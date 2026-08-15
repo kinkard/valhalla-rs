@@ -37,9 +37,8 @@ struct TileSet {
   rust::Vec<valhalla::baldr::GraphId> tiles() const;
   rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
                                                     GraphLevel level) const;
-  // It's Rust's side responsibility to manage GraphTile lifetime by doing
-  // - `boost::sp_adl_block::intrusive_ptr_add_ref` each time ptr is cloned
-  // - `boost::sp_adl_block::intrusive_ptr_release` each time ptr is dropped
+  // It's Rust's side responsibility to manage GraphTile lifetime by calling
+  // `add_ref()` each time the pointer is cloned and `release()` each time it is dropped.
   const valhalla::baldr::GraphTile* get_graph_tile(valhalla::baldr::GraphId id) const;
   TrafficTile get_traffic_tile(valhalla::baldr::GraphId id) const;
   uint64_t dataset_id() const;
@@ -48,12 +47,11 @@ struct TileSet {
 /// Creates a new [`TileSet`] instance based on a Valhalla's config.
 std::shared_ptr<TileSet> new_tileset(const boost::property_tree::ptree& config);
 
-inline const valhalla::baldr::GraphTile* clone(const valhalla::baldr::GraphTile* tile) {
+inline void add_ref(const valhalla::baldr::GraphTile* tile) {
   boost::sp_adl_block::intrusive_ptr_add_ref(tile);
-  return tile;
 }
 
-inline void drop(const valhalla::baldr::GraphTile* tile) {
+inline void release(const valhalla::baldr::GraphTile* tile) {
   boost::sp_adl_block::intrusive_ptr_release(tile);
 }
 
