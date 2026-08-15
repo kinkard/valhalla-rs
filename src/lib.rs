@@ -1,6 +1,7 @@
 use std::{
     fmt,
     hash::{Hash, Hasher},
+    ptr::NonNull,
 };
 
 use bitflags::bitflags;
@@ -198,17 +199,17 @@ mod ffi {
             level: GraphLevel,
         ) -> Vec<GraphId>;
         // As cxx doesn't support `boost::intrusive_ptr<T>`, `GraphTile` lifetime should be manually
-        // managed by calling [`ffi::clone()`] and [`ffi::drop()`].
+        // managed by calling [`ffi::add_ref()`] and [`ffi::release()`].
         fn get_graph_tile(self: &TileSet, id: GraphId) -> *const GraphTile;
         fn get_traffic_tile(self: &TileSet, id: GraphId) -> Result<TrafficTile>;
         fn dataset_id(self: &TileSet) -> u64;
 
         #[namespace = "valhalla::baldr"]
         type GraphTile;
-        // Clones pointer, increasing the ref counting.
-        unsafe fn clone(tile: *const GraphTile) -> *const GraphTile;
-        // Drops the pointer and decreases the ref count. `GraphTile` is deleted when ref_count reaches zero.
-        unsafe fn drop(tile: *const GraphTile);
+        // Increases the reference count.
+        unsafe fn add_ref(tile: *const GraphTile);
+        // Decreases the reference count. `GraphTile` is deleted when it reaches zero.
+        unsafe fn release(tile: *const GraphTile);
         fn id(self: &GraphTile) -> GraphId;
         // Returned slice works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`].
         fn directededges(tile: &GraphTile) -> &[DirectedEdge];
@@ -660,33 +661,30 @@ impl GraphReader {
 /// faster graph traversal.
 ///
 /// `GraphTile` can outlive the [`GraphReader`] that created it.
-pub struct GraphTile(*const ffi::GraphTile);
+pub struct GraphTile(NonNull<ffi::GraphTile>);
 
 impl Clone for GraphTile {
     fn clone(&self) -> Self {
-        Self(unsafe { ffi::clone(self.0) })
+        unsafe { ffi::add_ref(self.0.as_ptr()) };
+        Self(self.0)
     }
 }
 
 impl Drop for GraphTile {
     fn drop(&mut self) {
-        unsafe { ffi::drop(self.0) };
+        unsafe { ffi::release(self.0.as_ptr()) };
     }
 }
 
 impl GraphTile {
     fn new(tile: *const ffi::GraphTile) -> Option<Self> {
-        if !tile.is_null() {
-            Some(Self(tile))
-        } else {
-            None
-        }
+        NonNull::new(tile.cast_mut()).map(Self)
     }
 
     /// Explicit implementation of [`std::ops::Deref`] to keep inner methods private.
     fn deref(&self) -> &ffi::GraphTile {
-        // Safety: [`GraphTile::new()`] guarantees that inner pointer can't be null.
-        unsafe { &*self.0 }
+        // Safety: the pointer comes from [`GraphTile::new()`] and the tile outlives `self`.
+        unsafe { self.0.as_ref() }
     }
 
     /// GraphID of the tile, which includes the tile ID and hierarchy level.
