@@ -74,13 +74,6 @@ inline rust::Slice<const valhalla::baldr::NodeInfo> nodes(const valhalla::baldr:
   return rust::Slice(slice.data(), slice.size());
 }
 
-/// Helper function that allows to iterate over a slice of node transitions of that tile in Rust
-inline rust::Slice<const valhalla::baldr::NodeTransition> transitions(const valhalla::baldr::GraphTile& tile) {
-  // apparently, `tile.GetNodeTransitions()` requires `NodeInfo*` to return only transitions for that node.
-  const uint32_t count = tile.header()->transitioncount();
-  return rust::Slice(count ? tile.transition(0) : nullptr, count);
-}
-
 /// Helper function that allows to iterate over a slice of node edges of that tile in Rust
 inline rust::Slice<const valhalla::baldr::DirectedEdge> node_edges(const valhalla::baldr::GraphTile& tile,
                                                                    const valhalla::baldr::NodeInfo& node) {
