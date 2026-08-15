@@ -72,7 +72,6 @@ fn main() {
         .compile("libvalhalla-cxxbridge");
     println!("cargo:rerun-if-changed=src/actor.hpp");
     println!("cargo:rerun-if-changed=src/config.hpp");
-    println!("cargo:rerun-if-changed=src/costing.hpp");
     println!("cargo:rerun-if-changed=src/libvalhalla.cpp");
     println!("cargo:rerun-if-changed=src/libvalhalla.hpp");
 
