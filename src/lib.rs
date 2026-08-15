@@ -5,8 +5,6 @@ use std::{
 
 use bitflags::bitflags;
 use cxx::ExternType;
-#[cfg(feature = "proto")]
-use prost::Message;
 
 #[cfg(feature = "proto")]
 mod actor;
@@ -219,9 +217,6 @@ mod ffi {
         // Returned slice works only because of the `data: [u64; 4]` definition in [`ffi::NodeInfo`].
         fn nodes(tile: &GraphTile) -> &[NodeInfo];
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
-        // Returned slice works only because of the `data: [u64; 1]` definition in [`ffi::NodeTransition`].
-        fn transitions(tile: &GraphTile) -> &[NodeTransition];
-        fn transition(self: &GraphTile, index: u32) -> Result<*const NodeTransition>;
         fn node_edges<'a>(tile: &'a GraphTile, node: &NodeInfo) -> &'a [DirectedEdge];
         fn node_transitions<'a>(tile: &'a GraphTile, node: &NodeInfo) -> &'a [NodeTransition];
         fn node_latlon(tile: &GraphTile, node: &NodeInfo) -> LatLon;
@@ -408,32 +403,12 @@ mod ffi {
         /// [historical traffic]: https://valhalla.github.io/valhalla/mjolnir/historical_traffic/#historical-traffic
         fn decode_weekly_speeds(encoded: &str) -> Result<Vec<f32>>;
     }
-
-    #[cfg(feature = "proto")]
-    unsafe extern "C++" {
-        include!("valhalla/src/costing.hpp");
-
-        #[namespace = "valhalla::sif"]
-        type DynamicCost;
-        #[cxx_name = "Allowed"]
-        unsafe fn NodeAllowed(self: &DynamicCost, node: *const NodeInfo) -> bool;
-        unsafe fn IsAccessible(self: &DynamicCost, edge: *const DirectedEdge) -> bool;
-
-        /// Creates a new costing model from the given serialized [`crate::proto::Costing`] protobuf object.
-        fn new_cost(costing: &[u8]) -> Result<SharedPtr<DynamicCost>>;
-    }
 }
 
 // Safety: All operations do not mutate [`TileSet`] inner state and underlying resources are
 // managed by C++ `std::shared_ptr`.
 unsafe impl Send for ffi::TileSet {}
 unsafe impl Sync for ffi::TileSet {}
-
-// Safety: All operations do not mutate [`DynamicCost`] inner state.
-#[cfg(feature = "proto")]
-unsafe impl Send for ffi::DynamicCost {}
-#[cfg(feature = "proto")]
-unsafe impl Sync for ffi::DynamicCost {}
 
 /// Identifier of a node or an edge within the tiled, hierarchical graph.
 /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
@@ -663,18 +638,6 @@ impl GraphReader {
         )
     }
 
-    /// Graph tile object at given GraphId if it exists in the tileset.
-    #[deprecated(since = "0.6.9", note = "use `GraphReader::graph_tile()` instead")]
-    pub fn get_tile(&self, id: GraphId) -> Option<GraphTile> {
-        self.graph_tile(id)
-    }
-
-    /// Graph tile object at given GraphId if it exists in the tileset.
-    #[deprecated(since = "0.6.11", note = "use `GraphReader::graph_tile()` instead")]
-    pub fn tile(&self, id: GraphId) -> Option<GraphTile> {
-        self.graph_tile(id)
-    }
-
     /// Retrieves the graph tile data for a given [`GraphId`] if it exists in the tileset.
     pub fn graph_tile(&self, id: GraphId) -> Option<GraphTile> {
         GraphTile::new(self.0.get_graph_tile(id))
@@ -764,29 +727,6 @@ impl GraphTile {
         }
     }
 
-    /// Slice of all node transitions in the current tile.
-    #[deprecated(
-        since = "0.6.15",
-        note = "please use `GraphTile::node_transitions()` instead"
-    )]
-    pub fn transitions(&self) -> &[ffi::NodeTransition] {
-        ffi::transitions(self.deref())
-    }
-
-    /// Gets a node transition by index within the current tile.
-    #[deprecated(
-        since = "0.6.15",
-        note = "please use `GraphTile::node_transitions()` instead"
-    )]
-    pub fn transition(&self, index: u32) -> Option<&ffi::NodeTransition> {
-        match self.deref().transition(index) {
-            Ok(ptr) if !ptr.is_null() => Some(unsafe { &*ptr }),
-            // Valhalla always return non-null ptr if ok and throws an exception if the index is out of bounds.
-            // But it also sounds nice to handle nullptr in the same way.
-            _ => None,
-        }
-    }
-
     /// Coordinate in (lat,lon) format for the given node.
     /// This gives the exact location of the node with better precision than [`EdgeInfo::shape`] start/end points.
     #[inline(always)]
@@ -829,27 +769,6 @@ impl GraphTile {
     pub fn live_traffic(&self, de: &ffi::DirectedEdge) -> LiveTraffic {
         debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         LiveTraffic::from_bits(ffi::live_traffic(self.deref(), de))
-    }
-
-    /// Edge's live traffic speed in km/h if available. Returns `Some(0)` if the edge is closed due to traffic.
-    #[deprecated(since = "0.6.41", note = "use `live_traffic(de).speed()` instead")]
-    #[inline(always)]
-    pub fn live_speed(&self, de: &ffi::DirectedEdge) -> Option<u32> {
-        self.live_traffic(de).speed().map(u32::from)
-    }
-
-    /// Convenience method to determine whether an edge is currently closed
-    /// due to traffic. Roads are considered closed when the following are true
-    ///   a) have traffic data for that tile
-    ///   b) we have a valid record for that edge
-    ///   b) the speed is zero
-    #[deprecated(
-        since = "0.6.41",
-        note = "use `live_traffic(de).speed() == Some(0)` instead"
-    )]
-    #[inline(always)]
-    pub fn edge_closed(&self, de: &ffi::DirectedEdge) -> bool {
-        self.live_traffic(de).speed() == Some(0)
     }
 
     /// Overall edge speed, mixed from different [`SpeedSources`] in km/h. As not all requested speed sources may be
@@ -931,70 +850,6 @@ unsafe impl ExternType for NodeInfo {
 }
 
 impl NodeInfo {
-    /// Returns the range of edge indices for this node's outbound edges.
-    ///
-    /// This range can be used to slice the directed edges array from the same tile
-    /// that contains this node. The range represents indices within the tile's
-    /// edge array, not global edge identifiers.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # fn call_edges(reader: &valhalla::GraphReader) -> Option<()> {
-    /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
-    ///
-    /// // Get the tile containing the node
-    /// let tile = reader.graph_tile(node_id.tile())?;
-    /// let node = tile.node(node_id.id())?;
-    ///
-    /// for edge in &tile.directededges()[node.edges()] {
-    ///     println!("- {node_id} -> {} edge has {} length", edge.endnode(), edge.length());
-    /// }
-    /// # Some(())
-    /// # }
-    /// ```
-    #[deprecated(
-        since = "0.6.10",
-        note = "please use `GraphTile::node_edges()` instead"
-    )]
-    pub fn edges(&self) -> std::ops::Range<usize> {
-        let start = self.edge_index() as usize;
-        let count = self.edge_count() as usize;
-        start..start + count
-    }
-
-    /// Returns the range of transition indices for this node's transitions to other hierarchy levels.
-    ///
-    /// This range can be used to slice the node transitions array from the same tile
-    /// that contains this node. The range represents indices within the tile's
-    /// node transitions array, not global transition identifiers.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # fn call_edges(reader: &valhalla::GraphReader) -> Option<()> {
-    /// let node_id = valhalla::GraphId::from_parts(2, 12345, 67)?;
-    ///
-    /// // Get the tile containing the node
-    /// let tile = reader.graph_tile(node_id.tile())?;
-    /// let node = tile.node(node_id.id())?;
-    ///
-    /// for transition in &tile.transitions()[node.transitions()] {
-    ///     println!("- {node_id} has a transition to the {} node", transition.endnode());
-    /// }
-    /// # Some(())
-    /// # }
-    /// ```
-    #[deprecated(
-        since = "0.6.10",
-        note = "please use `GraphTile::node_transitions()` instead"
-    )]
-    pub fn transitions(&self) -> std::ops::Range<usize> {
-        let start = self.transition_index() as usize;
-        let count = self.transition_count() as usize;
-        start..start + count
-    }
-
     /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
     #[inline(always)]
     pub fn access(&self) -> Access {
@@ -1342,98 +1197,6 @@ impl TrafficTile {
             unsafe { std::ptr::write_volatile(self.speeds.add(i), 0u64) };
         }
         self.write_last_update(0);
-    }
-}
-
-/// A [costing model] that decides which edges and nodes a travel mode may use.
-///
-/// # Deprecated
-///
-/// Both checks it exposes are plain [`Access`] bit tests, and the options given here skip
-/// Valhalla's own defaults: unset fields stay at protobuf zero, so `truck` also accepts `AUTO`
-/// edges. See [`Access`] for the bits every other costing uses.
-///
-/// | Deprecated | Replacement for `auto` |
-/// |---|---|
-/// | `costing.node_accessible(node)` | `node.access().intersects(Access::AUTO \| Access::HOV)` |
-/// | `costing.edge_accessible(edge)` | `edge.forwardaccess().intersects(Access::AUTO \| Access::HOV)` |
-///
-/// Edge costs, turn costs, restrictions and closures were never exposed and would drag in a large
-/// part of Valhalla's internals - use the [`Actor`] API for those.
-///
-/// [costing model]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-models
-#[cfg(feature = "proto")]
-#[deprecated(
-    since = "0.6.43",
-    note = "use `Access` bits from `DirectedEdge::forwardaccess()` and `NodeInfo::access()` instead"
-)]
-#[derive(Clone)]
-pub struct CostingModel(cxx::SharedPtr<ffi::DynamicCost>);
-
-#[cfg(feature = "proto")]
-#[allow(deprecated)]
-impl CostingModel {
-    /// Creates a new costing model of the given type with default options.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #![allow(deprecated)]
-    /// use valhalla::{CostingModel, proto};
-    ///
-    /// let cost_model = CostingModel::new(proto::costing::Type::Auto).unwrap();
-    /// ```
-    pub fn new(costing_type: proto::costing::Type) -> Result<Self, Error> {
-        let costing = proto::Costing {
-            r#type: costing_type as i32,
-            ..Default::default()
-        };
-        let buf = costing.encode_to_vec();
-        Ok(Self(ffi::new_cost(&buf)?))
-    }
-
-    /// Creates a new costing model with custom [costing options].
-    ///
-    /// [costing options]: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/#costing-options
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #![allow(deprecated)]
-    /// use valhalla::{CostingModel, proto};
-    ///
-    /// let cost_model = CostingModel::with_options(&proto::Costing {
-    ///     r#type: proto::costing::Type::Auto as i32,
-    ///     has_options: Some(proto::costing::HasOptions::Options(
-    ///         proto::costing::Options {
-    ///             exclude_tolls: true,
-    ///             exclude_ferries: true,
-    ///             ..Default::default()
-    ///         },
-    ///     )),
-    ///     ..Default::default()
-    /// }).expect("Valid costing options");
-    /// ```
-    pub fn with_options(costing: &proto::Costing) -> Result<Self, Error> {
-        let buf = costing.encode_to_vec();
-        Ok(Self(ffi::new_cost(&buf)?))
-    }
-
-    /// Checks if the node is accessible according to this costing model.
-    ///
-    /// Node access can be restricted by bollards, gates, or access restrictions
-    /// that are specific to the travel mode.
-    pub fn node_accessible(&self, node: &ffi::NodeInfo) -> bool {
-        unsafe { self.0.NodeAllowed(node as *const ffi::NodeInfo) }
-    }
-
-    /// Checks if the edge is accessible according to this costing model.
-    ///
-    /// This performs a basic accessibility check based on edge access permissions
-    /// (auto/bicycle/pedestrian) without considering turn restrictions, closures,
-    /// or routing-specific constraints.
-    pub fn edge_accessible(&self, edge: &ffi::DirectedEdge) -> bool {
-        unsafe { self.0.IsAccessible(edge as *const ffi::DirectedEdge) }
     }
 }
 

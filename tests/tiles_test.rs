@@ -467,13 +467,6 @@ fn live_traffic() {
         traffic_tile.write_edge_traffic(edge_id, LiveTraffic::CLOSED);
         assert_eq!(tile.live_traffic(edge).speed(), Some(0)); // Some(0) = closed
 
-        // deprecated shims stay equivalent to `live_traffic(de).speed()`
-        #[allow(deprecated)]
-        {
-            assert_eq!(tile.live_speed(edge), Some(0));
-            assert!(tile.edge_closed(edge));
-        }
-
         traffic_tile.write_edge_traffic(edge_id, LiveTraffic::from_uniform_speed(72));
         assert_eq!(tile.live_traffic(edge).speed(), Some(72));
 
