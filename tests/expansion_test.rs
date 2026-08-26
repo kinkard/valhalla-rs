@@ -21,7 +21,7 @@ fn furthest_reachable_node() {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, de)| {
-                    (de.toll() && tile.edgeinfo(de).way_id == 6176755).then_some(i as u32)
+                    (de.toll() && tile.edgeinfo(de).way_id() == 6176755).then_some(i as u32)
                 })
                 .collect::<Vec<_>>();
             (!toll_edges.is_empty()).then_some((tile, toll_edges))

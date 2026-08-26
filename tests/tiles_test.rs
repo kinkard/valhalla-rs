@@ -50,7 +50,7 @@ fn graph_tile_can_outlive_reader() {
     let count = tile
         .directededges()
         .iter()
-        .filter(|e| tile.edgeinfo(e).speed_limit == 0)
+        .filter(|e| tile.edgeinfo(e).speed_limit().is_none())
         .count();
     assert_ne!(count, 0);
 
@@ -60,7 +60,7 @@ fn graph_tile_can_outlive_reader() {
     let other_count = tile
         .directededges()
         .iter()
-        .filter(|e| tile.edgeinfo(e).speed_limit == 0)
+        .filter(|e| tile.edgeinfo(e).speed_limit().is_none())
         .count();
     assert_eq!(
         count, other_count,
@@ -74,7 +74,7 @@ fn graph_tile_can_outlive_reader() {
     let cloned_count = cloned_tile
         .directededges()
         .iter()
-        .filter(|e| cloned_tile.edgeinfo(e).speed_limit == 0)
+        .filter(|e| cloned_tile.edgeinfo(e).speed_limit().is_none())
         .count();
     assert_eq!(
         count, cloned_count,
@@ -257,7 +257,11 @@ fn edges_in_tile() {
             );
 
             let ei = tile.edgeinfo(de);
-            assert_eq!(de.is_shortcut(), ei.way_id == 0, "Shortcuts have way_id 0");
+            assert_eq!(
+                de.is_shortcut(),
+                ei.way_id() == 0,
+                "Shortcuts have way_id 0"
+            );
 
             let endnode = de.endnode();
             assert_eq!(de.leaves_tile(), de.endnode().tile() != tile_id.tile());
@@ -354,7 +358,7 @@ fn nodes_in_tile() {
             assert!(ll.1 >= ANDORRA_BBOX.0.1 && ll.1 <= ANDORRA_BBOX.1.1);
 
             // This tileset has no elevation data
-            assert_eq!(node.elevation(), -500.0);
+            assert_eq!(node.elevation(), None);
 
             if !node.access().intersects(Access::AUTO) {
                 no_auto_access_count += 1;
@@ -387,7 +391,7 @@ fn reverse_edge() {
 
         let end_node = tile.node(de.endnode().id()).unwrap();
         let opp_de = &tile.node_edges(end_node)[de.opp_index() as usize];
-        assert_eq!(tile.edgeinfo(de).way_id, tile.edgeinfo(opp_de).way_id);
+        assert_eq!(tile.edgeinfo(de).way_id(), tile.edgeinfo(opp_de).way_id());
 
         let begin_node = tile.node(opp_de.endnode().id()).unwrap();
         assert_eq!(
@@ -640,4 +644,98 @@ fn wrong_tile_node_transitions() {
 
     let node = t2.node(0).unwrap();
     let _ = t1.node_transitions(node); // should panic
+}
+
+#[test]
+fn edge_info_shape() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).unwrap();
+
+    let mut edges = 0;
+    let mut points = 0;
+    for tile_id in reader.tiles() {
+        let tile = reader.graph_tile(tile_id).unwrap();
+        for de in tile.directededges() {
+            let ei = tile.edgeinfo(de);
+            let shape: Vec<_> = ei.shape().collect();
+
+            assert_eq!(ei.shape().len(), shape.len());
+            assert_eq!(ei.shape().count(), shape.len());
+            assert_eq!(ei.shape().is_empty(), shape.is_empty());
+            let (lo, hi) = ei.shape().size_hint();
+            assert!(lo <= shape.len() && shape.len() <= hi.unwrap());
+
+            // Andorra sits in a tight box, so a bad decode shows up immediately.
+            assert!(shape.len() >= 2, "way {} has {shape:?}", ei.way_id());
+            for point in &shape {
+                assert!((42.4..42.7).contains(&point.0), "{point:?}");
+                assert!((1.4..1.8).contains(&point.1), "{point:?}");
+            }
+
+            // The shape spans the edge, so it ends at the edge's end node.
+            if de.endnode().tile() == tile.id() {
+                let end = tile.node_latlon(tile.node(de.endnode().id()).unwrap());
+                let shape_end = if de.forward() {
+                    shape.last()
+                } else {
+                    shape.first()
+                }
+                .unwrap();
+                assert!(
+                    (shape_end.0 - end.0).abs() < 1e-5,
+                    "{shape_end:?} vs {end:?}"
+                );
+                assert!(
+                    (shape_end.1 - end.1).abs() < 1e-5,
+                    "{shape_end:?} vs {end:?}"
+                );
+            }
+
+            edges += 1;
+            points += shape.len();
+        }
+    }
+    assert_eq!((edges, points), (30418, 353806));
+}
+
+#[test]
+fn edge_info_elevation() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).unwrap();
+    let tile = reader.graph_tile(reader.tiles()[0]).unwrap();
+    let de = &tile.directededges()[0];
+    let ei = tile.edgeinfo(de);
+
+    // This tileset carries no elevation, so there are no samples between the nodes.
+    assert_eq!(ei.mean_elevation(), None);
+    assert_eq!(ei.elevation(de, 100.0, 110.0).count(), 0);
+}
+
+/// An edge's full profile in edge order: both end nodes, plus the samples between them.
+fn edge_profile(
+    tile: &valhalla::GraphTile,
+    edge: &valhalla::DirectedEdge,
+    start: f32,
+    end: f32,
+) -> Vec<f32> {
+    let mut profile = vec![start];
+    profile.extend(tile.edgeinfo(edge).elevation(edge, start, end));
+    profile.push(end);
+    profile
+}
+
+#[test]
+fn elevation_profile() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).unwrap();
+    let tile = reader.graph_tile(reader.tiles()[0]).unwrap();
+    let node = &tile.nodes()[0];
+    let edge = &tile.node_edges(node)[0];
+
+    // No elevation in this tileset, so both fall back to zero - the assembly is what matters.
+    let start = node.elevation().unwrap_or(0.0);
+    let end = reader
+        .graph_tile(edge.endnode())
+        .and_then(|t| t.node(edge.endnode().id())?.elevation())
+        .unwrap_or(start);
+
+    // Without elevation data the profile is just the two nodes, but the assembly is the same.
+    assert_eq!(edge_profile(&tile, edge, start, end), vec![start, end]);
 }

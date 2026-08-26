@@ -206,7 +206,7 @@ fn print_edges_table(tile_id: GraphId, edges: &[LiveTraffic], graph_tile: &valha
         let info = graph_tile.edgeinfo(de);
         rows.push(EdgeRow {
             graph_id: edge_id,
-            way_id: info.way_id,
+            way_id: info.way_id(),
             road_class: road_class_str(de.road_class()),
             edge_use: edge_use_str(de.use_type()),
             length_m: de.length(),

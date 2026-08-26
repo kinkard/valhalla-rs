@@ -90,7 +90,7 @@ inline rust::Slice<const valhalla::baldr::NodeTransition> node_transitions(const
 /// Helper function to get lat,lng for the given node
 LatLon node_latlon(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::NodeInfo& node);
 
-/// Helper function that workarounds the inability to use `baldr::EdgeInfo` in Rust
+/// Borrowed view of the tile's edge info: scalars, plus the shape as a slice for Rust to decode.
 EdgeInfo edgeinfo(const valhalla::baldr::GraphTile& tile, const valhalla::baldr::DirectedEdge& de);
 
 /// Helper method that returns the raw `TrafficSpeed` bits for the edge's live traffic record

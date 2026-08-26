@@ -3,6 +3,7 @@
 
 #include <valhalla/baldr/datetime.h>
 #include <valhalla/baldr/graphreader.h>
+#include <valhalla/midgard/elevation_encoding.h>
 #include <valhalla/midgard/encoded.h>
 
 #include <boost/property_tree/ptree.hpp>
@@ -130,26 +131,30 @@ LatLon node_latlon(const baldr::GraphTile& tile, const baldr::NodeInfo& node) {
 }
 
 EdgeInfo edgeinfo(const baldr::GraphTile& tile, const baldr::DirectedEdge& de) {
+  // `baldr::EdgeInfo` keeps these pointers protected, and a local class cannot hold static data
+  // members - hence the `using`s and the pointers-to-member as locals.
+  struct EdgeInfoPeek : baldr::EdgeInfo {
+    using baldr::EdgeInfo::encoded_elevation_;
+    using baldr::EdgeInfo::encoded_shape_;
+  };
+  constexpr auto shape_ptr = &EdgeInfoPeek::encoded_shape_;
+  constexpr auto elevation_ptr = &EdgeInfoPeek::encoded_elevation_;
+
   const auto edge_info = tile.edgeinfo(&de);
 
-  rust::string shape;
-  if (de.forward()) {
-    // todo: use `edge_info.lazy_shape()` for better performance
-    shape = midgard::encode(edge_info.shape());
-  } else {
-    // If the edge is not forward, we need to reverse the shape
-    std::vector<midgard::PointLL> edge_shape = edge_info.shape();
-    std::reverse(edge_shape.begin(), edge_shape.end());
-    shape = midgard::encode(edge_shape);
-  }
+  const auto* shape = reinterpret_cast<const uint8_t*>(edge_info.*shape_ptr);
+  const uint32_t shape_size = edge_info.encoded_shape_size();
+
+  const bool has_elevation = edge_info.has_elevation();
+  const int8_t* elevation = edge_info.*elevation_ptr;
+  const uint32_t elevation_size = has_elevation ? midgard::encoded_elevation_count(de.length()) : 0;
 
   return EdgeInfo{
     .way_id = edge_info.wayid(),
-    // todo: properly handle `0` and `baldr::kUnlimitedSpeedLimit`
+    .shape = rust::Slice<const uint8_t>(shape, shape_size),
+    .elevation = rust::Slice<const int8_t>(elevation, elevation_size),
     .speed_limit = static_cast<uint8_t>(edge_info.speed_limit()),
-    // todo: directionality!
-    // todo: use `edge_info.lazy_shape()` for better performance
-    .shape = std::move(shape),
+    .mean_elevation = has_elevation ? edge_info.mean_elevation() : -500.0f,
   };
 }
 

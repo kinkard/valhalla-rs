@@ -102,3 +102,7 @@ harness = false
 [[bench]]
 name = "config_bench"
 harness = false
+
+[[bench]]
+name = "api_bench"
+harness = false

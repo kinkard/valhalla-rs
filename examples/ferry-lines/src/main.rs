@@ -14,7 +14,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Result, anyhow};
 use clap::Parser;
-use polyline_iter::PolylineIter;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use valhalla::{
@@ -144,9 +143,13 @@ fn resolve_ferry_route(
     }
 
     let ei = begin_tile.edgeinfo(begin_edge);
-    let way_id = ei.way_id;
-    let mut geometry: Vec<LatLon> = Vec::new();
-    geometry.extend(PolylineIter::new(6, &ei.shape));
+    let way_id = ei.way_id();
+
+    // Shape is stored once per OSM way, so the reverse edge of a pair walks it backwards.
+    let mut geometry: Vec<LatLon> = ei.shape().map(LatLon::from).collect();
+    if !begin_edge.forward() {
+        geometry.reverse();
+    }
     let mut length_m = begin_edge.length();
 
     // Follow the remaining edges of the same OSM way until we hit land again.
@@ -169,17 +172,25 @@ fn resolve_ferry_route(
         }
 
         // Continue along the same OSM way; a ferry connecting only to other ferries stops here.
-        let (next_edge, shape) = end_tile
+        let next_edge = end_tile
             .node_edges(end_node)
             .iter()
             .enumerate()
             .filter(|(i, _)| *i != opp_index)
-            .find_map(|(_, de)| {
-                let ei = end_tile.edgeinfo(de);
-                (ei.way_id == way_id).then_some((de, ei.shape))
-            })?;
+            .map(|(_, de)| de)
+            .find(|de| end_tile.edgeinfo(de).way_id() == way_id)?;
 
-        geometry.extend(PolylineIter::new(6, &shape).skip(1)); // 1st point is the same as last point of previous edge
+        // Drop the point shared with the previous edge. A forward edge is already in edge order;
+        // a reverse one is appended and flipped in place.
+        let shape = end_tile.edgeinfo(next_edge).shape().map(LatLon::from);
+        if next_edge.forward() {
+            geometry.extend(shape.skip(1));
+        } else {
+            let start = geometry.len();
+            geometry.extend(shape);
+            geometry.pop(); // last in storage order is the edge's first
+            geometry[start..].reverse();
+        }
         length_m += next_edge.length();
 
         end_node_id = next_edge.endnode();

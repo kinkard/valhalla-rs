@@ -10,6 +10,7 @@ use cxx::ExternType;
 #[cfg(feature = "proto")]
 mod actor;
 pub mod config;
+mod encoded;
 #[cfg(feature = "proto")]
 pub mod proto;
 
@@ -17,8 +18,8 @@ pub mod proto;
 pub use actor::{Actor, Response};
 pub use config::Config;
 pub use config::ConfigBuilder;
+pub use encoded::{Elevation, Shape};
 pub use ffi::AdminInfo;
-pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
 pub use ffi::GraphLevel;
 pub use ffi::RoadClass;
@@ -114,20 +115,22 @@ mod ffi {
         kInvalid = 8,
     }
 
-    /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
-    struct EdgeInfo {
-        /// OSM Way ID of the edge.
-        way_id: u64,
-        /// Speed limit in km/h. 0 if not available and 255 if not limited (e.g. autobahn).
-        speed_limit: u8,
-        /// polyline6 encoded shape of the edge.
-        shape: String,
-    }
-
     /// Helper struct to pass coordinates in (lat, lon) format between C++ and Rust.
     struct LatLon {
         lat: f64,
         lon: f64,
+    }
+
+    /// Borrowed view of the tile's edge info record.
+    #[derive(Clone, Copy)]
+    struct EdgeInfo<'a> {
+        way_id: u64,
+        /// Shape in Valhalla's 7-bit encoding.
+        shape: &'a [u8],
+        /// One-byte elevation deltas, empty without elevation data.
+        elevation: &'a [i8],
+        speed_limit: u8,
+        mean_elevation: f32,
     }
 
     /// Information about the administrative area, such as country or state.
@@ -214,7 +217,7 @@ mod ffi {
         // Returned slice works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`].
         fn directededges(tile: &GraphTile) -> &[DirectedEdge];
         fn directededge(self: &GraphTile, index: usize) -> Result<*const DirectedEdge>;
-        fn edgeinfo(tile: &GraphTile, de: &DirectedEdge) -> EdgeInfo;
+        fn edgeinfo<'a>(tile: &'a GraphTile, de: &DirectedEdge) -> EdgeInfo<'a>;
         // Returned slice works only because of the `data: [u64; 4]` definition in [`ffi::NodeInfo`].
         fn nodes(tile: &GraphTile) -> &[NodeInfo];
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
@@ -294,6 +297,9 @@ mod ffi {
         /// # }
         /// ```
         fn opp_index(self: &DirectedEdge) -> u32;
+        /// Whether this edge is stored forward in [`crate::EdgeInfo`], which both edges of a pair
+        /// share. The reverse edge walks the stored shape and elevation backwards.
+        fn forward(self: &DirectedEdge) -> bool;
         /// Specialized use type of the edge.
         #[cxx_name = "use"]
         fn use_type(self: &DirectedEdge) -> EdgeUse;
@@ -341,8 +347,8 @@ mod ffi {
         fn edge_index(self: &NodeInfo) -> u32;
         /// Get the number of outbound directed edges from this node on the current hierarchy level.
         fn edge_count(self: &NodeInfo) -> u32;
-        /// Elevation of the node in meters. Returns `-500.0` if elevation data is not available.
-        fn elevation(self: &NodeInfo) -> f32;
+        #[cxx_name = "elevation"]
+        fn elevation_f32(self: &NodeInfo) -> f32;
         /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
         #[cxx_name = "access"]
         fn access_u16(self: &NodeInfo) -> u16;
@@ -569,6 +575,14 @@ bitflags! {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LatLon(pub f64, pub f64);
 
+/// Interop with anything taking `(lat, lon)` pairs.
+impl From<LatLon> for (f64, f64) {
+    #[inline(always)]
+    fn from(ll: LatLon) -> Self {
+        (ll.0, ll.1)
+    }
+}
+
 #[cfg(feature = "proto")]
 impl From<LatLon> for proto::LatLng {
     fn from(loc: LatLon) -> Self {
@@ -754,11 +768,13 @@ impl GraphTile {
         ffi::admininfo(self.deref(), index).ok()
     }
 
-    /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
+    /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation.
     #[inline(always)]
-    pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
+    pub fn edgeinfo<'a>(&'a self, de: &ffi::DirectedEdge) -> EdgeInfo<'a> {
         debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
-        ffi::edgeinfo(self.deref(), de)
+        EdgeInfo {
+            view: ffi::edgeinfo(self.deref(), de),
+        }
     }
 
     /// Live traffic record for this edge. When no traffic is loaded the record carries no reading
@@ -848,6 +864,13 @@ unsafe impl ExternType for NodeInfo {
 }
 
 impl NodeInfo {
+    /// Elevation of the node in meters, or `None` when the tileset carries no elevation.
+    #[inline(always)]
+    pub fn elevation(&self) -> Option<f32> {
+        let elevation = self.elevation_f32();
+        (elevation != NO_ELEVATION).then_some(elevation)
+    }
+
     /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
     #[inline(always)]
     pub fn access(&self) -> Access {
@@ -1198,6 +1221,58 @@ impl TrafficTile {
     }
 }
 
+/// Valhalla's "no elevation data" sentinel, `baldr::kMinElevation`.
+const NO_ELEVATION: f32 = -500.0;
+
+/// Dynamic (cold) information about an edge, from [`GraphTile::edgeinfo()`].
+///
+/// Borrows the tile: scalars are field reads, shape and elevation stay packed until iterated.
+#[derive(Clone, Copy)]
+pub struct EdgeInfo<'a> {
+    view: ffi::EdgeInfo<'a>,
+}
+
+impl<'a> EdgeInfo<'a> {
+    /// OSM Way ID of the edge.
+    #[inline(always)]
+    pub fn way_id(&self) -> u64 {
+        self.view.way_id
+    }
+
+    /// Speed limit in km/h, if tagged. `255` means unlimited, as on an autobahn.
+    #[inline(always)]
+    pub fn speed_limit(&self) -> Option<u8> {
+        (self.view.speed_limit != 0).then_some(self.view.speed_limit)
+    }
+
+    /// Mean elevation in meters, or `None` when the tileset carries no elevation.
+    #[inline(always)]
+    pub fn mean_elevation(&self) -> Option<f32> {
+        (self.view.mean_elevation != NO_ELEVATION).then_some(self.view.mean_elevation)
+    }
+
+    /// Shape bytes exactly as stored in the tile, in Valhalla's 7-bit encoding.
+    #[inline(always)]
+    pub fn encoded_shape(&self) -> &'a [u8] {
+        self.view.shape
+    }
+
+    /// Shape points, decoded from the tile without allocating.
+    #[inline(always)]
+    pub fn shape(&self) -> Shape<'a> {
+        Shape::new(self.view.shape)
+    }
+
+    /// Elevation between `edge`'s end nodes, in meters, in travel order. Needs both nodes'
+    /// [`NodeInfo::elevation()`] - samples are stored relative to the way's start.
+    #[inline(always)]
+    pub fn elevation(&self, edge: &ffi::DirectedEdge, start: f32, end: f32) -> Elevation<'a> {
+        let forward = edge.forward();
+        let first = if forward { start } else { end };
+        Elevation::new(self.view.elevation, first, forward)
+    }
+}
+
 /// Checks if the given reference points to an item within the given slice.
 fn ref_within_slice<T>(slice: &[T], item: &T) -> bool {
     let start = slice.as_ptr() as usize;
@@ -1209,6 +1284,24 @@ fn ref_within_slice<T>(slice: &[T], item: &T) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ref_within_slice() {
+        let data = [10, 20, 30, 40, 50];
+        assert!(ref_within_slice(&data, &data[0]));
+        assert!(ref_within_slice(&data, &data[2]));
+        assert!(ref_within_slice(&data, &data[4]));
+
+        let outside = 30;
+        assert!(!ref_within_slice(&data, &outside));
+
+        let subslice = &data[1..4];
+        assert!(!ref_within_slice(subslice, &data[0]));
+        assert!(ref_within_slice(subslice, &data[1]));
+        assert!(ref_within_slice(subslice, &data[2]));
+        assert!(ref_within_slice(subslice, &data[3]));
+        assert!(!ref_within_slice(subslice, &data[4]));
+    }
 
     #[test]
     fn graph_id() {
@@ -1238,24 +1331,6 @@ mod tests {
         assert_eq!(default_id.id(), 2097151);
 
         assert_eq!(GraphId::from_parts(8, id.tileid(), 0), None);
-    }
-
-    #[test]
-    fn test_ref_within_slice() {
-        let data = [10, 20, 30, 40, 50];
-        assert!(ref_within_slice(&data, &data[0]));
-        assert!(ref_within_slice(&data, &data[2]));
-        assert!(ref_within_slice(&data, &data[4]));
-
-        let outside = 30;
-        assert!(!ref_within_slice(&data, &outside));
-
-        let subslice = &data[1..4];
-        assert!(!ref_within_slice(subslice, &data[0]));
-        assert!(ref_within_slice(subslice, &data[1]));
-        assert!(ref_within_slice(subslice, &data[2]));
-        assert!(ref_within_slice(subslice, &data[3]));
-        assert!(!ref_within_slice(subslice, &data[4]));
     }
 
     #[test]

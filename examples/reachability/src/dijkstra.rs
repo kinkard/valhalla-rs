@@ -9,6 +9,50 @@ use valhalla::{DirectedEdge, GraphId, GraphReader, GraphTile, NodeInfo};
 
 use crate::{bitset::BitSet, priority_queue::PriorityQueue};
 
+/// One edge of a restored path, with the nodes it runs between.
+#[derive(Debug, Clone, Copy)]
+pub struct PathStep {
+    pub from: GraphId,
+    pub edge: GraphId,
+    pub to: GraphId,
+}
+
+/// A finished search: its outcome, plus enough breadcrumbs to walk the path back.
+pub struct Search {
+    pub result: SearchResult,
+    /// Node -> the node it was first reached from, and the edge that got there.
+    came_from: FxHashMap<GraphId, (GraphId, GraphId)>,
+    /// Where `stop_condition` fired: the node it fired at and the edge that satisfied it.
+    found: Option<(GraphId, GraphId)>,
+}
+
+impl Search {
+    /// Edges from the origin to where the search stopped, in travel order.
+    pub fn path(&self) -> Vec<PathStep> {
+        let Some((last_node, last_edge)) = self.found else {
+            return Vec::new();
+        };
+
+        // Walk the breadcrumbs back to the origin, then flip into travel order.
+        let mut steps = vec![PathStep {
+            from: last_node,
+            edge: last_edge,
+            to: GraphId::default(),
+        }];
+        let mut node = last_node;
+        while let Some(&(from, edge)) = self.came_from.get(&node) {
+            steps.push(PathStep {
+                from,
+                edge,
+                to: node,
+            });
+            node = from;
+        }
+        steps.reverse();
+        steps
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchResult {
     /// An edge satisfying `stop_condition` was reached, at this distance in metres.
@@ -27,8 +71,9 @@ pub fn search(
     edge_filter: impl Fn(&DirectedEdge) -> bool,
     stop_condition: impl Fn(&DirectedEdge) -> bool,
     max_distance: u32,
-) -> SearchResult {
+) -> Search {
     let mut nodes_to_visit = PriorityQueue::<u32, GraphId>::new();
+    let mut came_from = FxHashMap::<GraphId, (GraphId, GraphId)>::default();
     // One bitset per tile, allocated fresh per search.
     let mut visited = FxHashMap::<GraphId, BitSet>::default();
 
@@ -69,7 +114,11 @@ pub fn search(
         };
 
         if path_length >= max_distance {
-            return SearchResult::MaxDistanceReached;
+            return Search {
+                result: SearchResult::MaxDistanceReached,
+                came_from,
+                found: None,
+            };
         }
 
         let node = tile
@@ -84,12 +133,24 @@ pub fn search(
             nodes_to_visit.push(path_length, transition.endnode());
         }
 
-        for de in tile.node_edges(node) {
+        for (i, de) in tile.node_edges(node).iter().enumerate() {
             if !edge_filter(de) {
                 continue;
             }
+            // An edge is identified by its index in the tile, counting from the node's first.
+            let edge_id = GraphId::from_parts(
+                node_id.level(),
+                node_id.tileid(),
+                node.edge_index() + i as u32,
+            )
+            .expect("edge index came from this tile");
+
             if stop_condition(de) {
-                return SearchResult::Found(path_length);
+                return Search {
+                    result: SearchResult::Found(path_length),
+                    came_from,
+                    found: Some((node_id, edge_id)),
+                };
             }
 
             // Skip the push/pop entirely for nodes already settled.
@@ -100,11 +161,16 @@ pub fn search(
             {
                 continue;
             }
+            came_from.entry(next_node).or_insert((node_id, edge_id));
             nodes_to_visit.push(path_length + de.length(), next_node);
         }
     }
 
-    SearchResult::Exhausted
+    Search {
+        result: SearchResult::Exhausted,
+        came_from,
+        found: None,
+    }
 }
 
 /// Tile cache shared across every search from one origin. Nothing is evicted.
