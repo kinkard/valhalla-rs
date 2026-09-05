@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-polyline-iter = "0.3"
+polyline-iter = "0.4"
 valhalla = { path = "../..", features = ["proto"] }
 
 [dev-dependencies]
