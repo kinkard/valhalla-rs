@@ -1,6 +1,40 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
-use valhalla::{ConfigBuilder, GraphId, GraphReader, LiveTraffic};
+use valhalla::{Config, ConfigBuilder, GraphId, GraphReader, LiveTraffic};
+
+fn edgeinfo(c: &mut Criterion) {
+    let config = Config::from_tile_extract("./tests/andorra/tiles.tar").unwrap();
+    let reader = GraphReader::new(&config).unwrap();
+    let tiles: Vec<_> = reader
+        .tiles()
+        .into_iter()
+        .map(|id| reader.graph_tile(id).unwrap())
+        .collect();
+
+    c.bench_function("way_id over the tileset", |b| {
+        b.iter(|| {
+            let mut sum = 0u64;
+            for tile in &tiles {
+                for de in tile.directededges() {
+                    sum += black_box(tile.edgeinfo(de)).way_id;
+                }
+            }
+            black_box(sum)
+        })
+    });
+
+    c.bench_function("edge shapes over the tileset", |b| {
+        b.iter(|| {
+            let mut points_count = 0;
+            for tile in &tiles {
+                for de in tile.directededges() {
+                    points_count += black_box(tile.edgeinfo(de).shape().len());
+                }
+            }
+            black_box(points_count)
+        })
+    });
+}
 
 fn write_traffic(c: &mut Criterion) {
     let config = ConfigBuilder {
@@ -53,5 +87,5 @@ fn write_traffic(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, write_traffic);
+criterion_group!(benches, edgeinfo, write_traffic);
 criterion_main!(benches);

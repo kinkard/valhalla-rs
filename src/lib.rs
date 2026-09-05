@@ -10,6 +10,7 @@ use cxx::ExternType;
 #[cfg(feature = "proto")]
 mod actor;
 pub mod config;
+mod encoded;
 #[cfg(feature = "proto")]
 pub mod proto;
 
@@ -17,6 +18,7 @@ pub mod proto;
 pub use actor::{Actor, Response};
 pub use config::Config;
 pub use config::ConfigBuilder;
+pub use encoded::Shape;
 pub use ffi::AdminInfo;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
@@ -115,13 +117,15 @@ mod ffi {
     }
 
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
-    struct EdgeInfo {
+    /// N.B.: Check [`DirectedEdge::forward()`] before reading edge's shape.
+    #[derive(Clone, Copy)]
+    struct EdgeInfo<'a> {
         /// OSM Way ID of the edge.
         way_id: u64,
         /// Speed limit in km/h. 0 if not available and 255 if not limited (e.g. autobahn).
         speed_limit: u8,
-        /// polyline6 encoded shape of the edge.
-        shape: String,
+        /// Shape in Valhalla's 7-bit varint delta encoding.
+        encoded_shape: &'a [u8],
     }
 
     /// Helper struct to pass coordinates in (lat, lon) format between C++ and Rust.
@@ -214,7 +218,7 @@ mod ffi {
         // Returned slice works only because of the `data: [u64; 6]` definition in [`ffi::DirectedEdge`].
         fn directededges(tile: &GraphTile) -> &[DirectedEdge];
         fn directededge(self: &GraphTile, index: usize) -> Result<*const DirectedEdge>;
-        fn edgeinfo(tile: &GraphTile, de: &DirectedEdge) -> EdgeInfo;
+        fn edgeinfo<'a>(tile: &'a GraphTile, de: &DirectedEdge) -> EdgeInfo<'a>;
         // Returned slice works only because of the `data: [u64; 4]` definition in [`ffi::NodeInfo`].
         fn nodes(tile: &GraphTile) -> &[NodeInfo];
         fn node(self: &GraphTile, index: usize) -> Result<*const NodeInfo>;
@@ -294,6 +298,9 @@ mod ffi {
         /// # }
         /// ```
         fn opp_index(self: &DirectedEdge) -> u32;
+        /// Whether this edge is stored forward in [`crate::EdgeInfo`], which both edges of a pair
+        /// share. The reverse edge walks the stored shape and elevation backwards.
+        fn forward(self: &DirectedEdge) -> bool;
         /// Specialized use type of the edge.
         #[cxx_name = "use"]
         fn use_type(self: &DirectedEdge) -> EdgeUse;
@@ -756,7 +763,7 @@ impl GraphTile {
 
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
     #[inline(always)]
-    pub fn edgeinfo(&self, de: &ffi::DirectedEdge) -> ffi::EdgeInfo {
+    pub fn edgeinfo<'a>(&'a self, de: &ffi::DirectedEdge) -> EdgeInfo<'a> {
         debug_assert!(ref_within_slice(self.directededges(), de), "Wrong tile");
         ffi::edgeinfo(self.deref(), de)
     }
@@ -1195,6 +1202,14 @@ impl TrafficTile {
             unsafe { std::ptr::write_volatile(self.speeds.add(i), 0u64) };
         }
         self.write_last_update(0);
+    }
+}
+
+impl<'a> EdgeInfo<'a> {
+    /// Shape points, decoded from the tile without allocating.
+    #[inline(always)]
+    pub fn shape(&self) -> Shape<'a> {
+        Shape::new(self.encoded_shape)
     }
 }
 

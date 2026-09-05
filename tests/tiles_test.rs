@@ -641,3 +641,56 @@ fn wrong_tile_node_transitions() {
     let node = t2.node(0).unwrap();
     let _ = t1.node_transitions(node); // should panic
 }
+
+#[test]
+fn edge_info_shape() {
+    let reader = GraphReader::new(&Config::from_tile_extract(ANDORRA_TILES).unwrap()).unwrap();
+
+    let mut edges = 0;
+    let mut points = 0;
+    for tile_id in reader.tiles() {
+        let tile = reader.graph_tile(tile_id).unwrap();
+        for de in tile.directededges() {
+            let ei = tile.edgeinfo(de);
+
+            let shape = ei.shape().collect::<Vec<_>>();
+            assert!(shape.len() >= 2, "way {} has {shape:?}", ei.way_id);
+
+            let iter = ei.shape();
+            let (lo, hi) = ei.shape().size_hint();
+            assert!(lo <= shape.len() && shape.len() <= hi.unwrap());
+            assert_eq!(iter.len(), shape.len());
+            assert_eq!(iter.is_empty(), shape.is_empty());
+            assert_eq!(iter.count(), shape.len()); // `count()` is consuming, check it last
+
+            // Andorra sits in a tight box, so a bad decode shows up immediately.
+            for point in &shape {
+                assert!((42.4..42.7).contains(&point.0), "{point:?}");
+                assert!((1.4..1.8).contains(&point.1), "{point:?}");
+            }
+
+            // The shape spans the edge, so it ends at the edge's end node.
+            if de.endnode().tile() == tile.id() {
+                let end = tile.node_latlon(tile.node(de.endnode().id()).unwrap());
+                let shape_end = if de.forward() {
+                    shape.last()
+                } else {
+                    shape.first()
+                }
+                .unwrap();
+                assert!(
+                    (shape_end.0 - end.0).abs() < 1e-6,
+                    "{shape_end:?} vs {end:?}"
+                );
+                assert!(
+                    (shape_end.1 - end.1).abs() < 1e-6,
+                    "{shape_end:?} vs {end:?}"
+                );
+            }
+
+            edges += 1;
+            points += shape.len();
+        }
+    }
+    assert_eq!((edges, points), (30418, 353806));
+}
