@@ -14,18 +14,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Result, anyhow};
 use clap::Parser;
-use polyline_iter::PolylineIter;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use valhalla::{
-    Access, DirectedEdge, EdgeUse, GraphId, GraphReader, GraphTile, NodeInfo, TimeZoneInfo,
+    Access, DirectedEdge, EdgeUse, GraphId, GraphReader, GraphTile, LatLon, NodeInfo, TimeZoneInfo,
 };
 
 /// Ferries mapped as a loop can never reach land again; give up rather than spin.
 const MAX_EDGES_PER_FERRY: u32 = 50;
-
-/// Coordinate in (lat, lon) order.
-type LatLon = (f64, f64);
 
 #[derive(Parser)]
 #[command(about = "Extract ferry routes from a Valhalla tileset as GeoJSON")]
@@ -145,8 +141,12 @@ fn resolve_ferry_route(
 
     let ei = begin_tile.edgeinfo(begin_edge);
     let way_id = ei.way_id;
-    let mut geometry: Vec<LatLon> = Vec::new();
-    geometry.extend(PolylineIter::new(6, &ei.shape));
+
+    // Shape is stored once per OSM way, so the reverse edge of a pair walks it backwards.
+    let mut geometry = ei.shape().collect::<Vec<_>>();
+    if !begin_edge.forward() {
+        geometry.reverse();
+    }
     let mut length_m = begin_edge.length();
 
     // Follow the remaining edges of the same OSM way until we hit land again.
@@ -176,10 +176,19 @@ fn resolve_ferry_route(
             .filter(|(i, _)| *i != opp_index)
             .find_map(|(_, de)| {
                 let ei = end_tile.edgeinfo(de);
-                (ei.way_id == way_id).then_some((de, ei.shape))
+                (ei.way_id == way_id).then_some((de, ei.shape()))
             })?;
 
-        geometry.extend(PolylineIter::new(6, &shape).skip(1)); // 1st point is the same as last point of previous edge
+        // Drop the point shared with the previous edge. A forward edge is already in edge order;
+        // a reverse one is appended and flipped in place.
+        if next_edge.forward() {
+            geometry.extend(shape.skip(1));
+        } else {
+            let start = geometry.len();
+            geometry.extend(shape);
+            geometry.pop(); // last in storage order is the edge's first
+            geometry[start..].reverse();
+        }
         length_m += next_edge.length();
 
         end_node_id = next_edge.endnode();
@@ -283,7 +292,7 @@ struct Properties {
 
 fn as_lon_lat<S: Serializer>(geometry: &[LatLon], serializer: S) -> Result<S::Ok, S::Error> {
     let mut seq = serializer.serialize_seq(Some(geometry.len()))?;
-    for &(lat, lon) in geometry {
+    for &LatLon(lat, lon) in geometry {
         seq.serialize_element(&(lon, lat))?;
     }
     seq.end()

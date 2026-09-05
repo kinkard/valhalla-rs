@@ -391,7 +391,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "polyline-iter",
  "pretty_assertions",
  "rayon",
  "serde",
@@ -856,9 +855,9 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "polyline-iter"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae0c5f014912ea5086f9580e13f2d6ef95a63b797e22fc5deb552fee9031cb0d"
+checksum = "f2bfa0f990c161ddb81c696fe4c52c7a361c86fe2134731f6f3b1de39403acab"
 
 [[package]]
 name = "pretty_assertions"
@@ -1336,7 +1335,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "valhalla"
-version = "0.6.43"
+version = "0.7.0-dev"
 dependencies = [
  "bitflags",
  "cmake",

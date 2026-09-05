@@ -130,26 +130,23 @@ LatLon node_latlon(const baldr::GraphTile& tile, const baldr::NodeInfo& node) {
 }
 
 EdgeInfo edgeinfo(const baldr::GraphTile& tile, const baldr::DirectedEdge& de) {
+  // `baldr::EdgeInfo` keeps these pointers protected, and a local class cannot hold static data
+  // members - hence the `using`s and the pointers-to-member as locals.
+  struct EdgeInfoPeek : baldr::EdgeInfo {
+    using baldr::EdgeInfo::encoded_shape_;
+  };
+  constexpr auto shape_ptr = &EdgeInfoPeek::encoded_shape_;
+
   const auto edge_info = tile.edgeinfo(&de);
 
-  rust::string shape;
-  if (de.forward()) {
-    // todo: use `edge_info.lazy_shape()` for better performance
-    shape = midgard::encode(edge_info.shape());
-  } else {
-    // If the edge is not forward, we need to reverse the shape
-    std::vector<midgard::PointLL> edge_shape = edge_info.shape();
-    std::reverse(edge_shape.begin(), edge_shape.end());
-    shape = midgard::encode(edge_shape);
-  }
+  const auto* shape = reinterpret_cast<const uint8_t*>(edge_info.*shape_ptr);
+  const uint32_t shape_size = edge_info.encoded_shape_size();
 
   return EdgeInfo{
     .way_id = edge_info.wayid(),
     // todo: properly handle `0` and `baldr::kUnlimitedSpeedLimit`
     .speed_limit = static_cast<uint8_t>(edge_info.speed_limit()),
-    // todo: directionality!
-    // todo: use `edge_info.lazy_shape()` for better performance
-    .shape = std::move(shape),
+    .encoded_shape = rust::Slice<const uint8_t>(shape, shape_size),
   };
 }
 
