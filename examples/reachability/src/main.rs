@@ -97,7 +97,9 @@ fn analyse(
     // Snap like the router does; the search starts at the far end of the snapped edge.
     let edges = locate::locate(actor, coordinate, locate_radius)?;
 
-    let node_filter = |node: &NodeInfo| node.access().intersects(Access::AUTO);
+    // For this analytics we are not interested in private areas
+    let node_filter =
+        |node: &NodeInfo| node.access().intersects(Access::AUTO) && !node.private_access();
     let edge_filter = |edge: &DirectedEdge| edge.forwardaccess().intersects(Access::AUTO);
     // Hand-rolled, as Valhalla's `exclude_tolls` only penalises tolls.
     let toll_free = |edge: &DirectedEdge| edge_filter(edge) && !edge.toll();

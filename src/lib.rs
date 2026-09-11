@@ -22,6 +22,7 @@ pub use ffi::AdminInfo;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
 pub use ffi::GraphLevel;
+pub use ffi::NodeType;
 pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
 pub use ffi::TrafficTile;
@@ -113,6 +114,45 @@ mod ffi {
         kServiceOther = 7,
         /// [`DirectedEdge`] has only 3 bits for road class.
         kInvalid = 8,
+    }
+
+    /// Type of the node, mostly describing barriers and transit infrastructure.
+    #[namespace = "valhalla::baldr"]
+    #[repr(u8)]
+    #[derive(Debug)]
+    enum NodeType {
+        /// Regular intersection of 2 roads. The default for any node without a more specific tag.
+        kStreetIntersection = 0,
+        /// `barrier` = `gate`, `yes`, `lift_gate`, `swing_gate` or `sliding_beam`, or `bollard=rising`.
+        kGate = 1,
+        /// Fixed obstruction: `barrier` = `bollard`, `block`, `chain`, `bar`, `kissing_gate`,
+        /// `cycle_barrier` or `motorcycle_barrier`, or `bollard=removable`.
+        kBollard = 2,
+        /// `barrier=toll_booth`.
+        kTollBooth = 3,
+        /// Transit egress, from GTFS feeds rather than OSM.
+        kTransitEgress = 4,
+        /// Transit station, from GTFS feeds rather than OSM.
+        kTransitStation = 5,
+        /// Multi-use transit platform (rail and bus), from GTFS feeds rather than OSM.
+        kMultiUseTransitPlatform = 6,
+        /// `amenity=bicycle_rental`, or `shop=bicycle` with `service:bicycle:rental=yes`.
+        kBikeShare = 7,
+        /// `amenity=parking`.
+        kParking = 8,
+        /// `highway=motorway_junction`.
+        kMotorWayJunction = 9,
+        /// `barrier=border_control`.
+        kBorderControl = 10,
+        /// `highway=toll_gantry`. Unlike [`NodeType::kTollBooth`], it carries no transition cost
+        /// in Valhalla's costing.
+        kTollGantry = 11,
+        /// `barrier=sump_buster`.
+        kSumpBuster = 12,
+        /// `entrance=yes` with `indoor=yes`.
+        kBuildingEntrance = 13,
+        /// `highway=elevator`.
+        kElevator = 14,
     }
 
     /// Dynamic (cold) information about the edge, such as OSM Way ID, speed limit, shape, elevation, etc.
@@ -260,6 +300,9 @@ mod ffi {
         type RoadClass;
 
         #[namespace = "valhalla::baldr"]
+        type NodeType;
+
+        #[namespace = "valhalla::baldr"]
         type DirectedEdge = crate::DirectedEdge;
         /// End node of the directed edge. [`DirectedEdge::leaves_tile()`] returns true if end node is in a different tile.
         ///
@@ -345,11 +388,17 @@ mod ffi {
         fn edge_index(self: &NodeInfo) -> u32;
         /// Get the number of outbound directed edges from this node on the current hierarchy level.
         fn edge_count(self: &NodeInfo) -> u32;
+        /// Type of the node, e.g. gate, bollard or toll booth.
+        #[cxx_name = "type"]
+        fn node_type(self: &NodeInfo) -> NodeType;
         /// Elevation of the node in meters. Returns `-500.0` if elevation data is not available.
         fn elevation(self: &NodeInfo) -> f32;
         /// Access modes allowed to pass through the node. Bit mask using [`crate::Access`] constants.
         #[cxx_name = "access"]
         fn access_u16(self: &NodeInfo) -> u16;
+        /// Whether the node is tagged by `access=private`, e.g. a service area gate.
+        /// [`NodeInfo::access()`] stays fully open for such nodes, so this is the only way to spot them.
+        fn private_access(self: &NodeInfo) -> bool;
         /// Index of the administrative area (country) the node is in. Corresponding [`crate::AdminInfo`] can be
         /// retrieved using [`crate::GraphTile::admin_info()`].
         fn admin_index(self: &NodeInfo) -> u32;

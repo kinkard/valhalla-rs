@@ -2,7 +2,7 @@ use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
 
 use valhalla::{
-    Access, Config, GraphId, GraphLevel, GraphReader, LatLon, LiveTraffic, TimeZoneInfo,
+    Access, Config, GraphId, GraphLevel, GraphReader, LatLon, LiveTraffic, NodeType, TimeZoneInfo,
 };
 
 #[derive(Serialize)]
@@ -324,6 +324,9 @@ fn nodes_in_tile() {
 
     let mut no_auto_access_count = 0;
     let mut transition_count = 0;
+    let mut gate_count = 0;
+    let mut toll_booth_count = 0;
+    let mut private_access_count = 0;
     for tile_id in reader.tiles() {
         let tile = reader.graph_tile(tile_id).unwrap();
 
@@ -359,10 +362,29 @@ fn nodes_in_tile() {
             if !node.access().intersects(Access::AUTO) {
                 no_auto_access_count += 1;
             }
+
+            match node.node_type() {
+                NodeType::kGate => gate_count += 1,
+                NodeType::kTollBooth => toll_booth_count += 1,
+                _ => {}
+            }
+            if node.private_access() {
+                // Valhalla only applies the private access penalty to gates and bollards.
+                assert!(matches!(
+                    node.node_type(),
+                    NodeType::kGate | NodeType::kBollard
+                ));
+                // Access mask stays fully open, `private_access()` is the only way to spot it.
+                assert!(node.access().contains(Access::AUTO));
+                private_access_count += 1;
+            }
         }
     }
     assert_eq!(transition_count, 3550); // to be changed if tileset changes
     assert_eq!(no_auto_access_count, 22); // all nodes should have auto access
+    assert_eq!(gate_count, 84);
+    assert_eq!(toll_booth_count, 6);
+    assert_eq!(private_access_count, 3);
 }
 
 #[test]
