@@ -182,6 +182,8 @@ enum PyValue {
 struct PyParser {
     chars: Vec<char>,
     pos: usize,
+    /// `valhalla_build_config` picks platform-dependent defaults, based on the *target* here.
+    windows_target: bool,
 }
 
 impl PyParser {
@@ -189,6 +191,7 @@ impl PyParser {
         Self {
             chars: input.chars().collect(),
             pos: 0,
+            windows_target: std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "windows"),
         }
     }
 
@@ -222,13 +225,6 @@ impl PyParser {
         assert_eq!(c, expected, "Expected '{expected}', got '{c}'");
     }
 
-    fn consume(&mut self, word: &str) {
-        for expected in word.chars() {
-            let c = self.advance();
-            assert_eq!(c, expected, "Expected '{expected}', got '{c}'");
-        }
-    }
-
     fn parse_value(&mut self) -> PyValue {
         self.skip_ws();
         match self.peek() {
@@ -248,23 +244,42 @@ impl PyParser {
                 }
                 PyValue::Str(result)
             }
-            'T' => {
-                self.consume("True");
-                PyValue::Bool(true)
-            }
-            'F' => {
-                self.consume("False");
-                PyValue::Bool(false)
-            }
-            'O' => {
-                self.consume("Optional");
+            c if c == '-' || c.is_ascii_digit() => self.parse_number(),
+            c if c.is_ascii_alphabetic() || c == '_' => self.parse_call(),
+            c => panic!("Unexpected character '{c}' at position {}", self.pos),
+        }
+    }
+
+    /// Parses the named constructs `valhalla_build_config` uses inside its dicts:
+    /// `True`/`False`, `Optional(type)` and `ipc_endpoint(path, port)`.
+    fn parse_call(&mut self) -> PyValue {
+        let ident = self.parse_ident();
+        match ident.as_str() {
+            "True" => PyValue::Bool(true),
+            "False" => PyValue::Bool(false),
+            "Optional" => {
                 self.expect('(');
                 let type_name = self.parse_ident();
                 self.expect(')');
                 PyValue::Optional(type_name)
             }
-            c if c == '-' || c.is_ascii_digit() => self.parse_number(),
-            c => panic!("Unexpected character '{c}' at position {}", self.pos),
+            // Windows ZMQ has no ipc:// (AF_UNIX), so it falls back to loopback tcp://.
+            "ipc_endpoint" => {
+                self.expect('(');
+                let ipc_path = self.parse_string();
+                self.expect(',');
+                let tcp_port = match self.parse_number() {
+                    PyValue::Int(port) => port,
+                    other => panic!("Expected int port in ipc_endpoint, got {other:?}"),
+                };
+                self.expect(')');
+                PyValue::Str(if self.windows_target {
+                    format!("tcp://127.0.0.1:{tcp_port}")
+                } else {
+                    format!("ipc://{ipc_path}")
+                })
+            }
+            _ => panic!("Unexpected identifier '{ident}' at position {}", self.pos),
         }
     }
 
