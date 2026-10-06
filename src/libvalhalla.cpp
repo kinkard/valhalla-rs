@@ -4,6 +4,9 @@
 #include <valhalla/baldr/datetime.h>
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/midgard/encoded.h>
+#include <valhalla/midgard/sequence.h>
+
+#include <filesystem>
 
 #include <boost/property_tree/ptree.hpp>
 
@@ -22,6 +25,231 @@ struct GraphMemory : public baldr::GraphMemory {
 };
 
 }  // namespace
+
+namespace {
+
+/// Graph memory backed by a single memory-mapped tile file.
+struct MappedFile : public baldr::GraphMemory {
+  midgard::mem_map<char> map_;
+
+  MappedFile(const std::string& path, size_t bytes) : map_(path, bytes, POSIX_MADV_NORMAL, true) {
+    data = map_.get();
+    size = bytes;
+  }
+};
+
+/// Maps `dir/<tile suffix>`, or returns null when it is not a readable file.
+std::unique_ptr<const baldr::GraphMemory> map_tile_file(rust::Str dir, baldr::GraphId id) {
+  std::filesystem::path path{std::string(dir)};
+  path /= baldr::GraphTile::FileSuffix(id.tile_base());
+
+  std::error_code ec;
+  auto bytes = std::filesystem::file_size(path, ec);
+  if (ec || bytes == 0) {
+    return nullptr;
+  }
+  try {
+    return std::make_unique<MappedFile>(path.string(), bytes);
+  } catch (const std::exception&) {
+    return nullptr;
+  }
+}
+
+/// `tile_extract_t` is protected inside `baldr::GraphReader`, same trick as `new_tileset()`.
+struct ExtractPeek : public baldr::GraphReader {
+  static baldr::GraphReader::tile_extract_t open(const boost::property_tree::ptree& pt, bool readonly) {
+    return baldr::GraphReader::tile_extract_t(pt, readonly);
+  }
+};
+
+std::unique_ptr<const baldr::GraphMemory> traffic_memory_for(const TileArchive& traffic, uint64_t base) {
+  auto it = traffic.index_.find(base);
+  return it != traffic.index_.end() ? std::make_unique<GraphMemory>(traffic.tar_, it->second) : nullptr;
+}
+
+}  // namespace
+
+TileArchive::~TileArchive() {}
+
+std::shared_ptr<TileArchive> open_graph_archive(rust::Str path) {
+  boost::property_tree::ptree pt;
+  pt.put("tile_extract", std::string(path));
+  auto extract = ExtractPeek::open(pt, true);
+  if (!extract.archive) {
+    throw std::runtime_error("Failed to load tile extract");
+  }
+  return std::make_shared<TileArchive>(TileArchive{
+    .index_ = std::move(extract.tiles),
+    .tar_ = std::move(extract.archive),
+  });
+}
+
+std::shared_ptr<TileArchive> open_traffic_archive(rust::Str path, bool readonly) {
+  boost::property_tree::ptree pt;
+  pt.put("traffic_extract", std::string(path));
+  auto extract = ExtractPeek::open(pt, readonly);
+  if (!extract.traffic_archive) {
+    throw std::runtime_error("Failed to load traffic extract");
+  }
+  return std::make_shared<TileArchive>(TileArchive{
+    .index_ = std::move(extract.traffic_tiles),
+    .tar_ = std::move(extract.traffic_archive),
+  });
+}
+
+rust::Vec<baldr::GraphId> TileArchive::tiles() const {
+  rust::Vec<baldr::GraphId> result;
+  result.reserve(index_.size());
+  for (const auto& tile : index_) {
+    result.push_back(baldr::GraphId(tile.first));
+  }
+  return result;
+}
+
+rust::Vec<baldr::GraphId> tile_ids_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
+                                           GraphLevel level) {
+  const midgard::AABB2<midgard::PointLL> bbox(min_lon, min_lat, max_lon, max_lat);
+  const auto tile_ids = baldr::TileHierarchy::levels()[static_cast<size_t>(level)].tiles.TileList(bbox);
+
+  rust::Vec<baldr::GraphId> result;
+  result.reserve(tile_ids.size());
+  for (auto tile_id : tile_ids) {
+    result.push_back(baldr::GraphId(tile_id, static_cast<uint32_t>(level), 0));
+  }
+  return result;
+}
+
+rust::Vec<baldr::GraphId> TileArchive::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
+                                                     GraphLevel level) const {
+  rust::Vec<baldr::GraphId> result;
+  for (auto id : tile_ids_in_bbox(min_lat, min_lon, max_lat, max_lon, level)) {
+    if (index_.find(id.tile_base()) != index_.end()) {
+      result.push_back(id);
+    }
+  }
+  return result;
+}
+
+uint64_t TileArchive::dataset_id() const {
+  if (auto it = index_.begin(); it != index_.end()) {
+    auto tile = graph_tile(baldr::GraphId(it->first));
+    auto id = tile->header()->dataset_id();
+    release(tile);
+    return id;
+  }
+  return 0;
+}
+
+const baldr::GraphTile* TileArchive::graph_tile(baldr::GraphId id) const {
+  auto base = id.tile_base();
+  auto it = index_.find(base);
+  if (it == index_.end()) {
+    return nullptr;
+  }
+  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tar_, it->second)).detach();
+}
+
+const baldr::GraphTile* TileArchive::graph_tile_with_traffic(baldr::GraphId id, const TileArchive& traffic) const {
+  auto base = id.tile_base();
+  auto it = index_.find(base);
+  if (it == index_.end()) {
+    return nullptr;
+  }
+  return baldr::GraphTile::Create(base, std::make_unique<GraphMemory>(tar_, it->second),
+                                  traffic_memory_for(traffic, base))
+      .detach();
+}
+
+TrafficTile TileArchive::traffic_tile(baldr::GraphId id) const {
+  auto base = id.tile_base();
+  auto it = index_.find(base);
+  if (it == index_.end()) {
+    throw std::runtime_error("No traffic tile for the given id");
+  }
+
+  auto header = reinterpret_cast<volatile baldr::TrafficTileHeader*>(it->second.first);
+  if (header->traffic_tile_version != baldr::TRAFFIC_TILE_VERSION) {
+    throw std::runtime_error("Unsupported TrafficTile version");
+  }
+  if (sizeof(baldr::TrafficTileHeader) + header->directed_edge_count * sizeof(baldr::TrafficSpeed) !=
+      it->second.second) {
+    throw std::runtime_error("TrafficTile data size does not match header count");
+  }
+
+  return TrafficTile{
+    .header = reinterpret_cast<uint64_t*>(it->second.first),
+    .speeds = reinterpret_cast<uint64_t*>(it->second.first + sizeof(baldr::TrafficTileHeader)),
+    .edge_count = header->directed_edge_count,
+    .traffic_tar = tar_,
+  };
+}
+
+const baldr::GraphTile* graph_tile_from_dir(rust::Str dir, baldr::GraphId id) {
+  return baldr::GraphTile::Create(std::string(dir), id.tile_base()).detach();
+}
+
+const baldr::GraphTile* graph_tile_from_dir_with_traffic(rust::Str dir, baldr::GraphId id,
+                                                         const TileArchive& traffic) {
+  auto base = id.tile_base();
+  return baldr::GraphTile::Create(std::string(dir), base, traffic_memory_for(traffic, base)).detach();
+}
+
+const baldr::GraphTile* graph_tile_from_dir_mmap(rust::Str dir, baldr::GraphId id) {
+  auto memory = map_tile_file(dir, id);
+  if (!memory) {
+    return nullptr;
+  }
+  return baldr::GraphTile::Create(id.tile_base(), std::move(memory)).detach();
+}
+
+const baldr::GraphTile* graph_tile_from_dir_mmap_with_traffic(rust::Str dir, baldr::GraphId id,
+                                                              const TileArchive& traffic) {
+  auto base = id.tile_base();
+  auto memory = map_tile_file(dir, id);
+  if (!memory) {
+    return nullptr;
+  }
+  return baldr::GraphTile::Create(base, std::move(memory), traffic_memory_for(traffic, base)).detach();
+}
+
+namespace {
+
+/// Graph memory over a buffer Rust handed over. A `rust::Vec`'s heap buffer does not move when the
+/// `Vec` itself does, so `data` stays valid for this object's lifetime; destroying it frees the
+/// buffer through Rust's allocator.
+struct RustMemory : public baldr::GraphMemory {
+  rust::Vec<uint8_t> buf_;
+
+  explicit RustMemory(rust::Vec<uint8_t> buf) : buf_(std::move(buf)) {
+    data = reinterpret_cast<char*>(buf_.data());
+    size = buf_.size();
+  }
+};
+
+}  // namespace
+
+// If `Initialize` throws, `RustMemory` is already owned by the half-built tile and is destroyed
+// during unwinding, so the buffer is freed on the failure path too.
+const baldr::GraphTile* graph_tile_from_memory(baldr::GraphId id, rust::Vec<uint8_t> bytes) {
+  return baldr::GraphTile::Create(id.tile_base(), std::make_unique<RustMemory>(std::move(bytes))).detach();
+}
+
+const baldr::GraphTile* graph_tile_from_memory_with_traffic(baldr::GraphId id, rust::Vec<uint8_t> bytes,
+                                                            const TileArchive& traffic) {
+  auto base = id.tile_base();
+  return baldr::GraphTile::Create(base, std::make_unique<RustMemory>(std::move(bytes)),
+                                  traffic_memory_for(traffic, base))
+      .detach();
+}
+
+rust::String tile_file_suffix(baldr::GraphId id, bool gzipped) {
+  return baldr::GraphTile::FileSuffix(id.tile_base(),
+                                      gzipped ? baldr::SUFFIX_COMPRESSED : baldr::SUFFIX_NON_COMPRESSED, true);
+}
+
+baldr::GraphId tile_id_from_path(rust::Str path) {
+  return baldr::GraphId(baldr::GraphTile::GetTileId(std::string(path)));
+}
 
 TileSet::~TileSet() {}
 

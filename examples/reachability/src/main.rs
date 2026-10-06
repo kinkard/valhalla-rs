@@ -16,9 +16,10 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use serde::Serialize;
-use valhalla::{Access, Actor, DirectedEdge, GraphReader, LatLon, NodeInfo, RoadClass};
+use valhalla::breaking::{Cached, TileExtract};
+use valhalla::{Access, Actor, DirectedEdge, LatLon, NodeInfo, RoadClass};
 
-use crate::dijkstra::{CachedGraphReader, SearchResult};
+use crate::dijkstra::SearchResult;
 
 mod bitset;
 mod dijkstra;
@@ -81,7 +82,7 @@ fn main() -> Result<()> {
 
     let mut actor = Actor::new(&config).map_err(|e| anyhow!("failed to create Actor: {e}"))?;
     let reader =
-        GraphReader::new(&config).map_err(|e| anyhow!("failed to open GraphReader: {e}"))?;
+        TileExtract::from_config(&config).map_err(|e| anyhow!("failed to open tiles: {e}"))?;
 
     let verdict = analyse(&mut actor, reader, cli.coordinate, cli.locate_radius)?;
     println!("{}", serde_json::to_string_pretty(&verdict)?);
@@ -90,7 +91,7 @@ fn main() -> Result<()> {
 
 fn analyse(
     actor: &mut Actor,
-    reader: GraphReader,
+    reader: TileExtract,
     coordinate: LatLon,
     locate_radius: u32,
 ) -> Result<Verdict> {
@@ -107,7 +108,7 @@ fn analyse(
     let is_highway = |edge: &DirectedEdge| edge.road_class() < RoadClass::kPrimary;
 
     // One cache for all three searches.
-    let mut cache = CachedGraphReader::new(reader);
+    let mut cache = Cached::new(reader);
 
     let nearest_highway_distance = match dijkstra::search(
         &mut cache,

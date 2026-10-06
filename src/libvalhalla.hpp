@@ -22,6 +22,74 @@ enum class GraphLevel : uint8_t {
   Local = 2,
 };
 
+/// One memory-mapped tar of tiles.
+///
+/// Graph tiles and traffic tiles use the same archive layout, so one type serves both roles and the
+/// caller decides which role an archive plays. That is what makes `tile_dir` + `traffic.tar`
+/// expressible, which is the combination `TileSet` cannot represent.
+struct TileArchive {
+  /// Explicitly defined for the same reason as `TileSet::~TileSet()`.
+  ~TileArchive();
+
+  std::unordered_map<uint64_t, std::pair<char*, size_t>> index_;
+  std::shared_ptr<valhalla::midgard::tar> tar_;
+
+  rust::Vec<valhalla::baldr::GraphId> tiles() const;
+  rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
+                                                    GraphLevel level) const;
+  uint64_t dataset_id() const;
+
+  /// Reads this archive as graph tiles. Caller owns the refcount, as with `TileSet::get_graph_tile`.
+  const valhalla::baldr::GraphTile* graph_tile(valhalla::baldr::GraphId id) const;
+  /// As above, joining live traffic for the same tile id out of a second archive.
+  const valhalla::baldr::GraphTile* graph_tile_with_traffic(valhalla::baldr::GraphId id,
+                                                            const TileArchive& traffic) const;
+  /// Reads this archive as traffic tiles.
+  TrafficTile traffic_tile(valhalla::baldr::GraphId id) const;
+};
+
+/// Opens a tar of graph tiles. Always mapped read-only.
+std::shared_ptr<TileArchive> open_graph_archive(rust::Str path);
+/// Opens a tar of traffic tiles. `readonly == false` maps it writable for a traffic updater.
+std::shared_ptr<TileArchive> open_traffic_archive(rust::Str path, bool readonly);
+
+/// Reads one graph tile from a `tile_dir` layout. Returns null when the file is absent.
+const valhalla::baldr::GraphTile* graph_tile_from_dir(rust::Str dir, valhalla::baldr::GraphId id);
+/// As above, joining live traffic out of an archive.
+const valhalla::baldr::GraphTile* graph_tile_from_dir_with_traffic(rust::Str dir, valhalla::baldr::GraphId id,
+                                                                   const TileArchive& traffic);
+
+/// Builds one graph tile over a buffer whose ownership Rust hands over, without copying it. The
+/// tile owns `bytes` from here on and frees it - through Rust - when its last reference goes away.
+const valhalla::baldr::GraphTile* graph_tile_from_memory(valhalla::baldr::GraphId id, rust::Vec<uint8_t> bytes);
+/// As above, joining live traffic out of an archive.
+const valhalla::baldr::GraphTile* graph_tile_from_memory_with_traffic(valhalla::baldr::GraphId id,
+                                                                      rust::Vec<uint8_t> bytes,
+                                                                      const TileArchive& traffic);
+
+/// Reads one graph tile out of a `tile_dir` by memory-mapping the file rather than reading it.
+///
+/// Valhalla's own `tile_dir` path is `ifstream` into a `std::vector<char>`, which is ~1000x the
+/// cost of an extract lookup. Mapping the file instead makes the two comparable.
+const valhalla::baldr::GraphTile* graph_tile_from_dir_mmap(rust::Str dir, valhalla::baldr::GraphId id);
+/// As above, joining live traffic out of an archive.
+const valhalla::baldr::GraphTile* graph_tile_from_dir_mmap_with_traffic(rust::Str dir,
+                                                                        valhalla::baldr::GraphId id,
+                                                                        const TileArchive& traffic);
+
+/// Tiles of the hierarchy a bounding box touches, whether or not any source holds them.
+rust::Vec<valhalla::baldr::GraphId> tile_ids_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
+                                                     GraphLevel level);
+
+inline uint64_t tile_dataset_id(const valhalla::baldr::GraphTile& tile) {
+  return tile.header()->dataset_id();
+}
+
+/// The `tile_dir`-relative path a tile id is stored at, e.g. `2/000/519/120.gph`.
+rust::String tile_file_suffix(valhalla::baldr::GraphId id, bool gzipped);
+/// Inverse of `tile_file_suffix`. Throws when the path does not name a tile.
+valhalla::baldr::GraphId tile_id_from_path(rust::Str path);
+
 /// Exposed internal [`valhalla::baldr::GraphReader::tile_extract_t`], used to
 /// access exact graph and traffic tiles. Create it using [`new_tileset()`].
 struct TileSet {

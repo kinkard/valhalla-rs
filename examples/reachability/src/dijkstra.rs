@@ -2,10 +2,9 @@
 //! Cost is path length in metres: it orders the queue, `Found` reports it, `max_distance` caps it.
 //! No hierarchy limits — `max_distance` is the only cutoff.
 
-use std::collections::hash_map::Entry;
-
 use rustc_hash::FxHashMap;
-use valhalla::{DirectedEdge, GraphId, GraphReader, GraphTile, NodeInfo};
+use valhalla::breaking::{GraphReader, TileId};
+use valhalla::{DirectedEdge, GraphId, NodeInfo};
 
 use crate::{bitset::BitSet, priority_queue::PriorityQueue};
 
@@ -21,7 +20,7 @@ pub enum SearchResult {
 
 /// Explores outward from `edges`, following only what the filters allow.
 pub fn search(
-    graph_reader: &mut CachedGraphReader,
+    graph_reader: &mut impl GraphReader,
     edges: &[GraphId],
     node_filter: impl Fn(&NodeInfo) -> bool,
     edge_filter: impl Fn(&DirectedEdge) -> bool,
@@ -34,7 +33,7 @@ pub fn search(
 
     // Start from the far end of each snapped edge.
     for edge in edges {
-        let Some(tile) = graph_reader.graph_tile(*edge) else {
+        let Some(tile) = graph_reader.graph_tile(TileId::of(*edge)) else {
             continue;
         };
         let Some(de) = tile.directededge(edge.id()) else {
@@ -47,26 +46,16 @@ pub fn search(
 
     while let Some((path_length, node_id)) = nodes_to_visit.pop() {
         // First pop of a node is its shortest path; later arrivals are dropped.
-        let tile = match visited.entry(node_id.tile()) {
-            Entry::Occupied(mut occupied) => {
-                if !occupied.get_mut().insert(node_id.id() as usize) {
-                    continue; // already visited
-                }
-                graph_reader
-                    .graph_tile(node_id)
-                    .expect("tile was loaded when it was added to `visited`")
-            }
-            Entry::Vacant(vacant) => {
-                let Some(tile) = graph_reader.graph_tile(node_id) else {
-                    continue; // incomplete tileset, skip this node
-                };
-                let node_count = tile.nodes().len();
-                vacant
-                    .insert(BitSet::new(node_count))
-                    .insert(node_id.id() as usize);
-                tile
-            }
+        let Some(tile) = graph_reader.graph_tile(TileId::of(node_id)) else {
+            continue; // incomplete tileset, skip this node
         };
+        let first_visit = visited
+            .entry(node_id.tile())
+            .or_insert_with(|| BitSet::new(tile.nodes().len()))
+            .insert(node_id.id() as usize);
+        if !first_visit {
+            continue; // already visited
+        }
 
         if path_length >= max_distance {
             return SearchResult::MaxDistanceReached;
@@ -105,27 +94,4 @@ pub fn search(
     }
 
     SearchResult::Exhausted
-}
-
-/// Tile cache shared across every search from one origin. Nothing is evicted.
-pub struct CachedGraphReader {
-    graph_reader: GraphReader,
-    tiles: FxHashMap<GraphId, GraphTile>,
-}
-
-impl CachedGraphReader {
-    pub fn new(graph_reader: GraphReader) -> Self {
-        Self {
-            graph_reader,
-            tiles: Default::default(),
-        }
-    }
-
-    pub fn graph_tile(&mut self, graph_id: GraphId) -> Option<&GraphTile> {
-        let tile_id = graph_id.tile();
-        match self.tiles.entry(tile_id) {
-            Entry::Occupied(occupied) => Some(occupied.into_mut()),
-            Entry::Vacant(vacant) => Some(vacant.insert(self.graph_reader.graph_tile(tile_id)?)),
-        }
-    }
 }

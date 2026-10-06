@@ -9,6 +9,7 @@ use cxx::ExternType;
 
 #[cfg(feature = "proto")]
 mod actor;
+pub mod breaking;
 pub mod config;
 mod encoded;
 #[cfg(feature = "proto")]
@@ -248,6 +249,62 @@ mod ffi {
         fn get_traffic_tile(self: &TileSet, id: GraphId) -> Result<TrafficTile>;
         fn dataset_id(self: &TileSet) -> u64;
 
+        /// One memory-mapped tar of tiles - graph or traffic, the caller decides which role it plays.
+        type TileArchive;
+        fn open_graph_archive(path: &str) -> Result<SharedPtr<TileArchive>>;
+        fn open_traffic_archive(path: &str, readonly: bool) -> Result<SharedPtr<TileArchive>>;
+        fn tiles(self: &TileArchive) -> Vec<GraphId>;
+        fn tiles_in_bbox(
+            self: &TileArchive,
+            min_lat: f32,
+            min_lon: f32,
+            max_lat: f32,
+            max_lon: f32,
+            level: GraphLevel,
+        ) -> Vec<GraphId>;
+        fn dataset_id(self: &TileArchive) -> u64;
+        fn graph_tile(self: &TileArchive, id: GraphId) -> *const GraphTile;
+        fn graph_tile_with_traffic(
+            self: &TileArchive,
+            id: GraphId,
+            traffic: &TileArchive,
+        ) -> *const GraphTile;
+        fn traffic_tile(self: &TileArchive, id: GraphId) -> Result<TrafficTile>;
+
+        fn graph_tile_from_dir(dir: &str, id: GraphId) -> Result<*const GraphTile>;
+        fn graph_tile_from_dir_with_traffic(
+            dir: &str,
+            id: GraphId,
+            traffic: &TileArchive,
+        ) -> Result<*const GraphTile>;
+        fn graph_tile_from_memory(id: GraphId, bytes: Vec<u8>) -> Result<*const GraphTile>;
+        fn graph_tile_from_memory_with_traffic(
+            id: GraphId,
+            bytes: Vec<u8>,
+            traffic: &TileArchive,
+        ) -> Result<*const GraphTile>;
+
+        fn graph_tile_from_dir_mmap(dir: &str, id: GraphId) -> Result<*const GraphTile>;
+        fn graph_tile_from_dir_mmap_with_traffic(
+            dir: &str,
+            id: GraphId,
+            traffic: &TileArchive,
+        ) -> Result<*const GraphTile>;
+
+        fn tile_ids_in_bbox(
+            min_lat: f32,
+            min_lon: f32,
+            max_lat: f32,
+            max_lon: f32,
+            level: GraphLevel,
+        ) -> Vec<GraphId>;
+        fn tile_dataset_id(tile: &GraphTile) -> u64;
+
+        /// The `tile_dir`-relative path a tile id is stored at, e.g. `2/000/519/120.gph`.
+        fn tile_file_suffix(id: GraphId, gzipped: bool) -> String;
+        /// Inverse of [`tile_file_suffix`].
+        fn tile_id_from_path(path: &str) -> Result<GraphId>;
+
         #[namespace = "valhalla::baldr"]
         type GraphTile;
         // Increases the reference count.
@@ -466,6 +523,9 @@ mod ffi {
 // managed by C++ `std::shared_ptr`.
 unsafe impl Send for ffi::TileSet {}
 unsafe impl Sync for ffi::TileSet {}
+// Same reasoning as `TileSet`: immutable after construction, and the mapping outlives it.
+unsafe impl Send for ffi::TileArchive {}
+unsafe impl Sync for ffi::TileArchive {}
 
 /// Identifier of a node or an edge within the tiled, hierarchical graph.
 /// Includes the tile Id, hierarchy level, and a unique identifier within the tile/level.
@@ -559,6 +619,12 @@ impl GraphId {
 /// Represents errors returned by the Valhalla C++ API.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Error(Box<str>);
+
+impl Error {
+    pub(crate) fn msg(message: impl Into<Box<str>>) -> Self {
+        Self(message.into())
+    }
+}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -747,6 +813,10 @@ impl GraphTile {
     #[inline(always)]
     pub fn id(&self) -> GraphId {
         self.deref().id()
+    }
+
+    pub(crate) fn dataset_id(&self) -> u64 {
+        ffi::tile_dataset_id(self.deref())
     }
 
     /// Slice of all directed edges in the current tile.

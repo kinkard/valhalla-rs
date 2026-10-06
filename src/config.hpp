@@ -76,6 +76,11 @@ inline void ptree_put_int_array(boost::property_tree::ptree& pt, rust::Str path,
   pt.put_child(std::string(path.data(), path.size()), children);
 }
 
+/// Reads a string value out of the ptree, empty when the path is absent.
+inline rust::String ptree_get_str(const boost::property_tree::ptree& pt, rust::Str path) {
+  return pt.get<std::string>(std::string(path.data(), path.size()), "");
+}
+
 /// Initialize Valhalla's logger with the given config.
 inline void configure_logging(const boost::property_tree::ptree& pt) {
   if (pt.get_child_optional("logging")) {

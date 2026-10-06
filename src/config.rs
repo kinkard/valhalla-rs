@@ -19,6 +19,7 @@ pub(crate) mod ffi {
         fn ptree_put_float(pt: Pin<&mut ptree>, path: &str, value: f64);
         fn ptree_put_str_array(pt: Pin<&mut ptree>, path: &str, values: &[String]);
         fn ptree_put_int_array(pt: Pin<&mut ptree>, path: &str, values: &[i64]);
+        fn ptree_get_str(pt: &ptree, path: &str) -> String;
 
         /// Applies the config's `logging` section to Valhalla's logger.
         fn configure_logging(pt: &ptree);
@@ -122,6 +123,12 @@ impl Config {
     /// Reference to the inner Valhalla configuration object.
     pub(crate) fn inner(&self) -> &ffi::ptree {
         self.0.as_ref().unwrap()
+    }
+
+    /// String value at a dotted path, `None` when absent or empty.
+    pub fn get_str(&self, path: &str) -> Option<String> {
+        let value = ffi::ptree_get_str(self.inner(), path);
+        (!value.is_empty()).then_some(value)
     }
 }
 
