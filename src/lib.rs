@@ -22,7 +22,6 @@ pub use encoded::Shape;
 pub use ffi::AdminInfo;
 pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
-pub use ffi::GraphLevel;
 pub use ffi::NodeType;
 pub use ffi::RoadClass;
 pub use ffi::TimeZoneInfo;
@@ -32,14 +31,6 @@ pub use ffi::encode_weekly_speeds;
 
 #[cxx::bridge]
 mod ffi {
-    /// Hierarchical graph level that defines the type of roads and their importance.
-    #[derive(Clone, Copy, Debug)]
-    enum GraphLevel {
-        Highway = 0,
-        Arterial = 1,
-        Local = 2,
-    }
-
     /// Edge use type. Indicates specialized uses.
     #[namespace = "valhalla::baldr"]
     #[cxx_name = "Use"]
@@ -221,12 +212,10 @@ mod ffi {
     unsafe extern "C++" {
         include!("valhalla/src/libvalhalla.hpp");
 
-        type GraphLevel;
-
         #[namespace = "valhalla::baldr"]
         type GraphId = crate::GraphId;
         /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
-        fn from_parts(level: u32, tileid: u32, id: u32) -> Result<GraphId>;
+        fn from_parts(level: u8, tileid: u32, id: u32) -> Result<GraphId>;
 
         #[namespace = "boost::property_tree"]
         type ptree = crate::config::ffi::ptree;
@@ -240,7 +229,7 @@ mod ffi {
             min_lon: f32,
             max_lat: f32,
             max_lon: f32,
-            level: GraphLevel,
+            level: u8,
         ) -> Vec<GraphId>;
         // As cxx doesn't support `boost::intrusive_ptr<T>`, `GraphTile` lifetime should be manually
         // managed by calling [`ffi::add_ref()`] and [`ffi::release()`].
@@ -527,14 +516,14 @@ impl GraphId {
     /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
     /// Returns `None` if the level is invalid (greater than 7) or if the tile ID is invalid (greater than 2^22).
     #[inline(always)]
-    pub fn from_parts(level: u32, tileid: u32, id: u32) -> Option<Self> {
+    pub fn from_parts(level: u8, tileid: u32, id: u32) -> Option<Self> {
         ffi::from_parts(level, tileid, id).ok()
     }
 
     /// Hierarchy level of the tile this identifier belongs to.
     #[inline(always)]
-    pub fn level(&self) -> u32 {
-        self.value as u32 & 0x7
+    pub fn level(&self) -> u8 {
+        (self.value & 0x7) as u8
     }
 
     /// Tile identifier of this GraphId within the hierarchy level.
@@ -685,7 +674,7 @@ impl GraphReader {
     }
 
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.
-    pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: GraphLevel) -> Vec<GraphId> {
+    pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: u8) -> Vec<GraphId> {
         self.0.tiles_in_bbox(
             min.0 as f32,
             min.1 as f32,

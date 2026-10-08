@@ -418,7 +418,7 @@ fn parse_tile_id(s: &str) -> Result<GraphId> {
 }
 
 fn to_graph_id(level: &str, tileid: &str, id: &str) -> Result<GraphId> {
-    let level: u32 = level
+    let level: u8 = level
         .parse()
         .with_context(|| format!("invalid level {level:?}"))?;
     let tileid: u32 = tileid

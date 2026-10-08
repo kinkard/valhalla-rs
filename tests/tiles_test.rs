@@ -1,9 +1,7 @@
 use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
 
-use valhalla::{
-    Access, Config, GraphId, GraphLevel, GraphReader, LatLon, LiveTraffic, NodeType, TimeZoneInfo,
-};
+use valhalla::{Access, Config, GraphId, GraphReader, LatLon, LiveTraffic, NodeType, TimeZoneInfo};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -132,39 +130,39 @@ fn tiles_in_bbox() {
     all_tiles.sort_by_key(|id| id.value); // order is not guaranteed, sort for comparison
     assert!(!all_tiles.is_empty(), "Should have tiles in the dataset");
 
-    let mut world_tiles: Vec<GraphId> =
-        [GraphLevel::Highway, GraphLevel::Arterial, GraphLevel::Local]
-            .iter()
-            .flat_map(|&level| {
-                reader.tiles_in_bbox(LatLon(-90.0, -180.0), LatLon(90.0, 180.0), level)
-            })
-            .collect();
+    let mut world_tiles: Vec<GraphId> = (0..=2)
+        .flat_map(|level| reader.tiles_in_bbox(LatLon(-90.0, -180.0), LatLon(90.0, 180.0), level))
+        .collect();
     world_tiles.sort_by_key(|id| id.value);
     assert_eq!(
         all_tiles, world_tiles,
         "All tiles should equal world bbox tiles"
     );
 
-    let mut andorra_tiles: Vec<GraphId> =
-        [GraphLevel::Highway, GraphLevel::Arterial, GraphLevel::Local]
-            .iter()
-            .flat_map(|&level| reader.tiles_in_bbox(ANDORRA_BBOX.0, ANDORRA_BBOX.1, level))
-            .collect();
+    let mut andorra_tiles: Vec<GraphId> = (0..=2)
+        .flat_map(|level| reader.tiles_in_bbox(ANDORRA_BBOX.0, ANDORRA_BBOX.1, level))
+        .collect();
     andorra_tiles.sort_by_key(|id| id.value);
     assert_eq!(
         all_tiles, andorra_tiles,
         "All tiles should equal Andorra bbox tiles"
     );
 
-    for level in [GraphLevel::Highway, GraphLevel::Arterial, GraphLevel::Local] {
+    // And no other levels
+    for level in [3, 7, u8::MAX] {
+        let tiles = reader.tiles_in_bbox(LatLon(-90.0, -180.0), LatLon(90.0, 180.0), level);
+        assert!(tiles.is_empty());
+    }
+
+    for level in 0..=2 {
         let tiles = reader.tiles_in_bbox(ANDORRA_BBOX.0, ANDORRA_BBOX.1, level);
-        assert!(!tiles.is_empty(), "No tiles found for level {level:?}");
+        assert!(!tiles.is_empty(), "No tiles found for level {level}");
         for tile_id in tiles {
             assert!(
                 tile_id != GraphId::default(),
                 "Tile ID should not be invalid"
             );
-            assert_eq!(tile_id.level(), level.repr as u32);
+            assert_eq!(tile_id.level(), level);
             // GraphId::id() is the index of the edge in the tile, which is always 0 for the tile itself
             assert_eq!(tile_id.id(), 0);
             assert_eq!(tile_id.tile(), tile_id);

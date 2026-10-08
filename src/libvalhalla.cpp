@@ -56,14 +56,18 @@ rust::Vec<baldr::GraphId> TileSet::tiles() const {
 }
 
 rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
-                                                 GraphLevel level) const {
+                                                 uint8_t level) const {
+  rust::vec<baldr::GraphId> result;
+  if (level >= baldr::TileHierarchy::levels().size()) {
+    return result;
+  }
+
   const midgard::AABB2<midgard::PointLL> bbox(min_lon, min_lat, max_lon, max_lat);
   const auto tile_ids = baldr::TileHierarchy::levels()[static_cast<size_t>(level)].tiles.TileList(bbox);
 
-  rust::vec<baldr::GraphId> result;
   result.reserve(tile_ids.size());
   for (auto tile_id : tile_ids) {
-    const baldr::GraphId graph_id(tile_id, static_cast<uint32_t>(level), 0);
+    const baldr::GraphId graph_id(tile_id, level, 0);
     // List only tiles that we have
     if (tiles_.find(graph_id.tile_base()) != tiles_.end()) {
       result.push_back(graph_id);

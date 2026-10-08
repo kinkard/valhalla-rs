@@ -16,12 +16,6 @@ struct TimeZoneInfo;
 struct TrafficTile;
 struct LatLon;
 
-enum class GraphLevel : uint8_t {
-  Highway = 0,
-  Arterial = 1,
-  Local = 2,
-};
-
 /// Exposed internal [`valhalla::baldr::GraphReader::tile_extract_t`], used to
 /// access exact graph and traffic tiles. Create it using [`new_tileset()`].
 struct TileSet {
@@ -36,7 +30,7 @@ struct TileSet {
 
   rust::Vec<valhalla::baldr::GraphId> tiles() const;
   rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
-                                                    GraphLevel level) const;
+                                                    uint8_t level) const;
   // It's Rust's side responsibility to manage GraphTile lifetime by calling
   // `add_ref()` each time the pointer is cloned and `release()` each time it is dropped.
   const valhalla::baldr::GraphTile* get_graph_tile(valhalla::baldr::GraphId id) const;
@@ -56,7 +50,7 @@ inline void release(const valhalla::baldr::GraphTile* tile) {
 }
 
 /// Helper function as cxx unable to call constructors with arguments.
-inline valhalla::baldr::GraphId from_parts(uint32_t level, uint32_t tileid, uint32_t id) {
+inline valhalla::baldr::GraphId from_parts(uint8_t level, uint32_t tileid, uint32_t id) {
   return valhalla::baldr::GraphId(tileid, level, id);
 }
 
