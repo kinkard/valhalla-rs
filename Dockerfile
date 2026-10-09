@@ -1,17 +1,25 @@
 # An isolated environment for tests and sanity checks on CI
 
-FROM rust:slim-trixie AS builder
+ARG RUST_VERSION=1.98
+FROM rust:${RUST_VERSION}-slim-trixie AS builder
+
+# Rust 1.98 is built on LLVM 22: clang/lld must be the same major for `-Clinker-plugin-lto`, bump them together.
+ARG LLVM_VERSION=22
 
 # Rust tools
 RUN rustup component add rustfmt clippy
 
+# LLVM toolchain from apt.llvm.org, as Debian trixie ships only LLVM 19
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/trixie/ llvm-toolchain-trixie-${LLVM_VERSION} main" > /etc/apt/sources.list.d/llvm.list
+
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
-    # LLVM toolchain for proper LTO support between Rust and C/C++
-    clang \
-    llvm \
-    lld \
+    clang-${LLVM_VERSION} \
+    llvm-${LLVM_VERSION} \
+    lld-${LLVM_VERSION} \
     # Valhalla build dependencies
     build-essential \
     cmake \
@@ -21,10 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev
 
 # https://doc.rust-lang.org/beta/rustc/linker-plugin-lto.html
-ENV CC=clang CXX=clang++ AR=llvm-ar RANLIB=llvm-ranlib
-# TODO: Latest Rust requires clang-21, which is not available in apt for trixie.
-# Install it for `-Clinker-plugin-lto -Clinker=clang`
-ENV RUSTFLAGS="-Clink-arg=-fuse-ld=lld"
+ENV CC=clang-${LLVM_VERSION} CXX=clang++-${LLVM_VERSION} AR=llvm-ar-${LLVM_VERSION} RANLIB=llvm-ranlib-${LLVM_VERSION}
+ENV RUSTFLAGS="-Clinker-plugin-lto -Clinker=clang-${LLVM_VERSION} -Clink-arg=-fuse-ld=lld-${LLVM_VERSION}"
 
 WORKDIR /usr/src/app
 

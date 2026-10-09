@@ -1,9 +1,9 @@
 [package]
 name = "valhalla"
 
-version = "0.6.46"
+version = "0.6.47"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.98"
 description = "Rust bindings for Valhalla routing engine"
 readme = "README.md"
 repository = "https://github.com/kinkard/valhalla-rs"
@@ -76,12 +76,12 @@ proto = ["dep:prost", "dep:prost-build"]
 [dependencies]
 bitflags = "2"
 # Lock to specific version to avoid accidentally upgrading to a version that somehow breaks compatibility.
-cxx = { version = "=1.0.198", features = ["c++20"] }
+cxx = { version = "=1.0.203", features = ["c++20"] }
 prost = { version = "0.14", optional = true }
 
 [build-dependencies]
 cmake = "0.1"
-cxx-build = "=1.0.198"
+cxx-build = "=1.0.203"
 miniserde = "0.1"    # For compile_commands.json parsing
 pkg-config = "0.3"
 prost-build = { version = "0.14", optional = true }
