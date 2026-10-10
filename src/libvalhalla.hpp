@@ -15,6 +15,7 @@ struct EdgeInfo;
 struct TimeZoneInfo;
 struct TrafficTile;
 struct LatLon;
+struct TileId;
 
 /// Exposed internal [`valhalla::baldr::GraphReader::tile_extract_t`], used to
 /// access exact graph and traffic tiles. Create it using [`new_tileset()`].
@@ -28,13 +29,12 @@ struct TileSet {
   std::shared_ptr<valhalla::midgard::tar> tar_;
   std::shared_ptr<valhalla::midgard::tar> traffic_tar_;
 
-  rust::Vec<valhalla::baldr::GraphId> tiles() const;
-  rust::Vec<valhalla::baldr::GraphId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
-                                                    uint8_t level) const;
+  rust::Vec<TileId> tiles() const;
+  rust::Vec<TileId> tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon, uint8_t level) const;
   // It's Rust's side responsibility to manage GraphTile lifetime by calling
   // `add_ref()` each time the pointer is cloned and `release()` each time it is dropped.
-  const valhalla::baldr::GraphTile* get_graph_tile(valhalla::baldr::GraphId id) const;
-  TrafficTile get_traffic_tile(valhalla::baldr::GraphId id) const;
+  const valhalla::baldr::GraphTile* get_graph_tile(TileId id) const;
+  TrafficTile get_traffic_tile(TileId id) const;
   uint64_t dataset_id() const;
 };
 
@@ -50,8 +50,8 @@ inline void release(const valhalla::baldr::GraphTile* tile) {
 }
 
 /// Helper function as cxx unable to call constructors with arguments.
-inline valhalla::baldr::GraphId from_parts(uint8_t level, uint32_t tileid, uint32_t id) {
-  return valhalla::baldr::GraphId(tileid, level, id);
+inline valhalla::baldr::GraphId from_parts(uint8_t level, uint32_t tile_index, uint32_t id) {
+  return valhalla::baldr::GraphId(tile_index, level, id);
 }
 
 /// Helper function that allows to iterate over a slice of directed edges of that tile in Rust

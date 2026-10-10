@@ -209,7 +209,7 @@ fn junction_info(reader: &GraphReader, de: &DirectedEdge) -> Option<(GraphId, u3
     let end_tile = reader.graph_tile(end_node_id)?;
     let node = end_tile.node(end_node_id.id())?;
     let index = node.edge_index() + de.opp_index();
-    let opposing = GraphId::from_parts(end_node_id.level(), end_node_id.tileid(), index)?;
+    let opposing = end_node_id.tile().graph_id(index)?;
     Some((opposing, node.edge_count(), node.density()))
 }
 

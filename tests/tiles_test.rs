@@ -1,7 +1,9 @@
 use miniserde::{Serialize, json};
 use pretty_assertions::assert_eq;
 
-use valhalla::{Access, Config, GraphId, GraphReader, LatLon, LiveTraffic, NodeType, TimeZoneInfo};
+use valhalla::{
+    Access, Config, GraphId, GraphReader, LatLon, LiveTraffic, NodeType, TileId, TimeZoneInfo,
+};
 
 #[derive(Serialize)]
 struct ValhallaConfig {
@@ -107,6 +109,29 @@ fn traffic_tile_can_outlive_reader() {
 }
 
 #[test]
+fn graph_tile_accepts_any_id_inside_the_tile() {
+    let config = ValhallaConfig {
+        mjolnir: MjolnirConfig {
+            tile_extract: ANDORRA_TILES.into(),
+            traffic_extract: ANDORRA_TRAFFIC.into(),
+        },
+    };
+    let reader = GraphReader::new(&Config::from_json(&json::to_string(&config)).unwrap())
+        .expect("Failed to create GraphReader");
+
+    for tile_id in reader.tiles() {
+        let tile = reader.graph_tile(tile_id).unwrap();
+        let last_edge = (tile.directededges().len() as u32).saturating_sub(1);
+        let last_node = (tile.nodes().len() as u32).saturating_sub(1);
+        for id in [0, last_edge, last_node] {
+            let id = tile_id.graph_id(id).unwrap();
+            assert_eq!(reader.graph_tile(id).unwrap().id(), tile_id, "{id}");
+            assert_eq!(reader.traffic_tile(id).unwrap().id(), tile_id, "{id}");
+        }
+    }
+}
+
+#[test]
 fn tiles_in_bbox() {
     let config = ValhallaConfig {
         mjolnir: MjolnirConfig {
@@ -127,22 +152,22 @@ fn tiles_in_bbox() {
     );
 
     let mut all_tiles = reader.tiles();
-    all_tiles.sort_by_key(|id| id.value); // order is not guaranteed, sort for comparison
+    all_tiles.sort(); // order is not guaranteed, sort for comparison
     assert!(!all_tiles.is_empty(), "Should have tiles in the dataset");
 
-    let mut world_tiles: Vec<GraphId> = (0..=2)
+    let mut world_tiles: Vec<TileId> = (0..=2)
         .flat_map(|level| reader.tiles_in_bbox(LatLon(-90.0, -180.0), LatLon(90.0, 180.0), level))
         .collect();
-    world_tiles.sort_by_key(|id| id.value);
+    world_tiles.sort();
     assert_eq!(
         all_tiles, world_tiles,
         "All tiles should equal world bbox tiles"
     );
 
-    let mut andorra_tiles: Vec<GraphId> = (0..=2)
+    let mut andorra_tiles: Vec<TileId> = (0..=2)
         .flat_map(|level| reader.tiles_in_bbox(ANDORRA_BBOX.0, ANDORRA_BBOX.1, level))
         .collect();
-    andorra_tiles.sort_by_key(|id| id.value);
+    andorra_tiles.sort();
     assert_eq!(
         all_tiles, andorra_tiles,
         "All tiles should equal Andorra bbox tiles"
@@ -158,14 +183,8 @@ fn tiles_in_bbox() {
         let tiles = reader.tiles_in_bbox(ANDORRA_BBOX.0, ANDORRA_BBOX.1, level);
         assert!(!tiles.is_empty(), "No tiles found for level {level}");
         for tile_id in tiles {
-            assert!(
-                tile_id != GraphId::default(),
-                "Tile ID should not be invalid"
-            );
+            assert_ne!(tile_id, TileId::default(), "Tile ID should not be invalid");
             assert_eq!(tile_id.level(), level);
-            // GraphId::id() is the index of the edge in the tile, which is always 0 for the tile itself
-            assert_eq!(tile_id.id(), 0);
-            assert_eq!(tile_id.tile(), tile_id);
 
             let tile = reader.graph_tile(tile_id);
             assert!(tile.is_some(), "Tile should exist for ID: {tile_id:?}");
@@ -258,7 +277,7 @@ fn edges_in_tile() {
             assert_eq!(de.is_shortcut(), ei.way_id == 0, "Shortcuts have way_id 0");
 
             let endnode = de.endnode();
-            assert_eq!(de.leaves_tile(), de.endnode().tile() != tile_id.tile());
+            assert_eq!(de.leaves_tile(), de.endnode().tile() != tile_id);
             if de.leaves_tile() {
                 assert!(reader.graph_tile(endnode.tile()).is_some());
             }
@@ -444,7 +463,7 @@ fn live_traffic() {
     // find a tile the the most edges to have a good number of edges to test
     let tile_id = {
         let mut max_edges = 0;
-        let mut max_tile_id = GraphId::default();
+        let mut max_tile_id = TileId::default();
         for tile_id in reader.tiles() {
             let tile = reader.graph_tile(tile_id).unwrap();
 

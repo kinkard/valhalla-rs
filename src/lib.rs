@@ -24,6 +24,7 @@ pub use ffi::EdgeInfo;
 pub use ffi::EdgeUse;
 pub use ffi::NodeType;
 pub use ffi::RoadClass;
+pub use ffi::TileId;
 pub use ffi::TimeZoneInfo;
 pub use ffi::TrafficTile;
 pub use ffi::decode_weekly_speeds;
@@ -165,6 +166,13 @@ mod ffi {
         lon: f64,
     }
 
+    /// Identifies a tile: its hierarchy level and its index within that level.
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    struct TileId {
+        /// `level | tile_index << 3`, as C++ `GraphId::tile_value()`.
+        value: u32,
+    }
+
     /// Information about the administrative area, such as country or state.
     #[derive(Clone)]
     struct AdminInfo {
@@ -206,23 +214,20 @@ mod ffi {
         traffic_tar: SharedPtr<tar>,
     }
 
-    // Force cxx to generate Vec<GraphId> support.
-    impl Vec<GraphId> {}
-
     unsafe extern "C++" {
         include!("valhalla/src/libvalhalla.hpp");
 
         #[namespace = "valhalla::baldr"]
         type GraphId = crate::GraphId;
-        /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
-        fn from_parts(level: u8, tileid: u32, id: u32) -> Result<GraphId>;
+        /// Constructs a new `GraphId` from the given hierarchy level, tile index, and unique ID within the tile.
+        fn from_parts(level: u8, tile_index: u32, id: u32) -> Result<GraphId>;
 
         #[namespace = "boost::property_tree"]
         type ptree = crate::config::ffi::ptree;
 
         type TileSet;
         fn new_tileset(config: &ptree) -> Result<SharedPtr<TileSet>>;
-        fn tiles(self: &TileSet) -> Vec<GraphId>;
+        fn tiles(self: &TileSet) -> Vec<TileId>;
         fn tiles_in_bbox(
             self: &TileSet,
             min_lat: f32,
@@ -230,11 +235,11 @@ mod ffi {
             max_lat: f32,
             max_lon: f32,
             level: u8,
-        ) -> Vec<GraphId>;
+        ) -> Vec<TileId>;
         // As cxx doesn't support `boost::intrusive_ptr<T>`, `GraphTile` lifetime should be manually
         // managed by calling [`ffi::add_ref()`] and [`ffi::release()`].
-        fn get_graph_tile(self: &TileSet, id: GraphId) -> *const GraphTile;
-        fn get_traffic_tile(self: &TileSet, id: GraphId) -> Result<TrafficTile>;
+        fn get_graph_tile(self: &TileSet, id: TileId) -> *const GraphTile;
+        fn get_traffic_tile(self: &TileSet, id: TileId) -> Result<TrafficTile>;
         fn dataset_id(self: &TileSet) -> u64;
 
         #[namespace = "valhalla::baldr"]
@@ -270,7 +275,7 @@ mod ffi {
         #[namespace = "valhalla::midgard"]
         type tar;
 
-        /// GraphID of the tile, which includes the tile ID and hierarchy level.
+        /// Base `GraphId` of the graph tile this traffic tile belongs to.
         fn id(tile: &TrafficTile) -> GraphId;
         /// Seconds since epoch of the last update.
         fn last_update(tile: &TrafficTile) -> u64;
@@ -470,6 +475,7 @@ unsafe impl ExternType for GraphId {
 }
 
 impl Default for GraphId {
+    #[inline(always)]
     fn default() -> Self {
         Self {
             // `valhalla::baldr::kInvalidGraphId`
@@ -482,7 +488,7 @@ impl fmt::Debug for GraphId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GraphId")
             .field("level", &self.level())
-            .field("tileid", &self.tileid())
+            .field("tile_index", &self.tile_index())
             .field("id", &self.id())
             .finish()
     }
@@ -490,7 +496,7 @@ impl fmt::Debug for GraphId {
 
 impl fmt::Display for GraphId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}/{}/{}", self.level(), self.tileid(), self.id())
+        write!(f, "{}/{}/{}", self.level(), self.tile_index(), self.id())
     }
 }
 
@@ -513,11 +519,11 @@ impl GraphId {
         Self { value }
     }
 
-    /// Constructs a new `GraphId` from the given hierarchy level, tile ID, and unique ID within the tile.
-    /// Returns `None` if the level is invalid (greater than 7) or if the tile ID is invalid (greater than 2^22).
+    /// Constructs a new `GraphId` from the given hierarchy level, tile index, and unique ID within the tile.
+    /// Returns `None` if the level is invalid (greater than 7) or if the tile index is invalid (greater than 2^22).
     #[inline(always)]
-    pub fn from_parts(level: u8, tileid: u32, id: u32) -> Option<Self> {
-        ffi::from_parts(level, tileid, id).ok()
+    pub fn from_parts(level: u8, tile_index: u32, id: u32) -> Option<Self> {
+        ffi::from_parts(level, tile_index, id).ok()
     }
 
     /// Hierarchy level of the tile this identifier belongs to.
@@ -526,22 +532,74 @@ impl GraphId {
         (self.value & 0x7) as u8
     }
 
-    /// Tile identifier of this GraphId within the hierarchy level.
+    /// Index of the tile within its hierarchy level, C++ `GraphId::tileid()`.
     #[inline(always)]
-    pub fn tileid(&self) -> u32 {
+    pub fn tile_index(&self) -> u32 {
         ((self.value & 0x1fffff8) >> 3) as u32
     }
 
-    /// Combined tile information (level and tile id) as a single value.
+    /// The tile this identifier belongs to.
     #[inline(always)]
-    pub fn tile(&self) -> GraphId {
-        Self::new(self.value & 0x1ffffff)
+    pub fn tile(&self) -> TileId {
+        TileId {
+            value: (self.value & 0x1ffffff) as u32,
+        }
     }
 
     /// Identifier within the tile, unique within the tile and level.
     #[inline(always)]
     pub fn id(&self) -> u32 {
         ((self.value & 0x3ffffe000000) >> 25) as u32
+    }
+}
+
+impl TileId {
+    /// Hierarchy level of the tile.
+    #[inline(always)]
+    pub fn level(&self) -> u8 {
+        (self.value & 0x7) as u8
+    }
+
+    /// Index of the tile within its hierarchy level.
+    #[inline(always)]
+    pub fn tile_index(&self) -> u32 {
+        self.value >> 3
+    }
+
+    /// Identifier of a node or an edge within this tile. Returns `None` if `id` is out of range.
+    #[inline(always)]
+    pub fn graph_id(&self, id: u32) -> Option<GraphId> {
+        GraphId::from_parts(self.level(), self.tile_index(), id)
+    }
+}
+
+/// The invalid tile, the one [`GraphId::default()`] belongs to.
+impl Default for TileId {
+    #[inline(always)]
+    fn default() -> Self {
+        GraphId::default().tile()
+    }
+}
+
+impl From<GraphId> for TileId {
+    #[inline(always)]
+    fn from(id: GraphId) -> Self {
+        id.tile()
+    }
+}
+
+impl fmt::Debug for TileId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TileId")
+            .field("level", &self.level())
+            .field("tile_index", &self.tile_index())
+            .finish()
+    }
+}
+
+impl fmt::Display for TileId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}/{}", self.level(), self.tile_index())
     }
 }
 
@@ -669,12 +727,12 @@ impl GraphReader {
     }
 
     /// List all tiles in the tileset.
-    pub fn tiles(&self) -> Vec<GraphId> {
+    pub fn tiles(&self) -> Vec<TileId> {
         self.0.tiles()
     }
 
     /// List all tiles in the bounding box for a given hierarchy level in the tileset.
-    pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: u8) -> Vec<GraphId> {
+    pub fn tiles_in_bbox(&self, min: LatLon, max: LatLon, level: u8) -> Vec<TileId> {
         self.0.tiles_in_bbox(
             min.0 as f32,
             min.1 as f32,
@@ -684,14 +742,16 @@ impl GraphReader {
         )
     }
 
-    /// Retrieves the graph tile data for a given [`GraphId`] if it exists in the tileset.
-    pub fn graph_tile(&self, id: GraphId) -> Option<GraphTile> {
-        GraphTile::new(self.0.get_graph_tile(id))
+    /// Retrieves the graph tile if it exists in the tileset. Takes a [`TileId`], or the [`GraphId`]
+    /// of anything inside the tile.
+    pub fn graph_tile(&self, id: impl Into<TileId>) -> Option<GraphTile> {
+        GraphTile::new(self.0.get_graph_tile(id.into()))
     }
 
-    /// Retrieves the live traffic tile data for a given [`GraphId`] if it exists in the tileset.
-    pub fn traffic_tile(&self, id: GraphId) -> Option<ffi::TrafficTile> {
-        self.0.get_traffic_tile(id).ok()
+    /// Retrieves the live traffic tile if it exists in the tileset. Takes a [`TileId`], or the
+    /// [`GraphId`] of anything inside the tile.
+    pub fn traffic_tile(&self, id: impl Into<TileId>) -> Option<ffi::TrafficTile> {
+        self.0.get_traffic_tile(id.into()).ok()
     }
 }
 
@@ -732,10 +792,10 @@ impl GraphTile {
         unsafe { self.0.as_ref() }
     }
 
-    /// GraphID of the tile, which includes the tile ID and hierarchy level.
+    /// Id of this tile.
     #[inline(always)]
-    pub fn id(&self) -> GraphId {
-        self.deref().id()
+    pub fn id(&self) -> TileId {
+        self.deref().id().tile()
     }
 
     /// Slice of all directed edges in the current tile.
@@ -1178,10 +1238,10 @@ fn encode_congestion(congestion: Option<f32>) -> u64 {
 }
 
 impl TrafficTile {
-    /// GraphID of the tile, which includes the tile ID and hierarchy level.
+    /// Id of the graph tile this traffic tile belongs to.
     #[inline(always)]
-    pub fn id(&self) -> GraphId {
-        ffi::id(self)
+    pub fn id(&self) -> TileId {
+        ffi::id(self).tile()
     }
 
     /// Seconds since epoch of the last update.
@@ -1267,30 +1327,51 @@ mod tests {
     fn graph_id() {
         let id = GraphId::new(5411833275938);
         assert_eq!(id.level(), 2);
-        assert_eq!(id.tileid(), 838852);
+        assert_eq!(id.tile_index(), 838852);
         assert_eq!(id.id(), 161285);
         assert_eq!(
-            GraphId::from_parts(id.level(), id.tileid(), id.id()),
+            GraphId::from_parts(id.level(), id.tile_index(), id.id()),
             Some(id)
         );
         assert_eq!(format!("{id}"), "2/838852/161285");
         assert_eq!(
             format!("{id:?}"),
-            "GraphId { level: 2, tileid: 838852, id: 161285 }"
+            "GraphId { level: 2, tile_index: 838852, id: 161285 }"
         );
-
-        let base = id.tile();
-        assert_eq!(base.level(), 2);
-        assert_eq!(base.tileid(), 838852);
-        assert_eq!(base.id(), 0);
-        assert_eq!(GraphId::from_parts(id.level(), id.tileid(), 0), Some(base));
 
         let default_id = GraphId::default();
         assert_eq!(default_id.level(), 7);
-        assert_eq!(default_id.tileid(), 4194303);
+        assert_eq!(default_id.tile_index(), 4194303);
         assert_eq!(default_id.id(), 2097151);
 
-        assert_eq!(GraphId::from_parts(8, id.tileid(), 0), None);
+        assert_eq!(GraphId::from_parts(8, id.tile_index(), 0), None);
+    }
+
+    #[test]
+    fn tile_id() {
+        let id = GraphId::new(5411833275938);
+        let tile = id.tile();
+        assert_eq!(tile, TileId::from(id));
+        assert_eq!(tile.level(), 2);
+        assert_eq!(tile.tile_index(), 838852);
+        assert_eq!(format!("{tile}"), "2/838852");
+        assert_eq!(
+            format!("{tile:?}"),
+            "TileId { level: 2, tile_index: 838852 }"
+        );
+
+        // Every id in the tile shares it, whatever its own id.
+        assert_eq!(tile.graph_id(id.id()), Some(id));
+        assert_eq!(tile.graph_id(0).map(|base| base.tile()), Some(tile));
+        assert_eq!(tile.graph_id(0).map(|base| base.id()), Some(0));
+        assert_eq!(tile.graph_id(1 << 21), None);
+
+        // Same packing as C++ `GraphId::tile_value()`.
+        assert_eq!(tile.value, (id.value & 0x1ffffff) as u32);
+
+        let invalid = TileId::default();
+        assert_eq!(invalid.level(), 7);
+        assert_eq!(invalid.tile_index(), 4194303);
     }
 
     #[test]

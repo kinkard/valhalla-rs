@@ -19,7 +19,7 @@ use clap::Parser;
 use h3o::{CellIndex, LatLng, Resolution};
 use rustc_hash::FxHashMap;
 use serde::{Serialize, Serializer, ser::SerializeSeq};
-use valhalla::{Access, Actor, DirectedEdge, GraphId, GraphReader, GraphTile, LatLon};
+use valhalla::{Access, Actor, DirectedEdge, GraphId, GraphReader, GraphTile, LatLon, TileId};
 
 use crate::{bitset::BitSet, priority_queue::PriorityQueue};
 
@@ -205,7 +205,7 @@ fn expand(
 
     // Tile cache and visited set in one map: the `entry()` handing over the tile also marks the
     // node. `GraphTile` is refcounted, so cloning it to release the borrow is a refcount bump.
-    let mut cache = FxHashMap::<GraphId, (GraphTile, BitSet)>::default();
+    let mut cache = FxHashMap::<TileId, (GraphTile, BitSet)>::default();
     let mut queue = PriorityQueue::<u32, Label>::new();
     let mut cells = FxHashMap::<CellIndex, u32>::default();
 

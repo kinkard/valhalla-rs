@@ -5,7 +5,7 @@
 use std::collections::hash_map::Entry;
 
 use rustc_hash::FxHashMap;
-use valhalla::{DirectedEdge, GraphId, GraphReader, GraphTile, NodeInfo};
+use valhalla::{DirectedEdge, GraphId, GraphReader, GraphTile, NodeInfo, TileId};
 
 use crate::{bitset::BitSet, priority_queue::PriorityQueue};
 
@@ -30,7 +30,7 @@ pub fn search(
 ) -> SearchResult {
     let mut nodes_to_visit = PriorityQueue::<u32, GraphId>::new();
     // One bitset per tile, allocated fresh per search.
-    let mut visited = FxHashMap::<GraphId, BitSet>::default();
+    let mut visited = FxHashMap::<TileId, BitSet>::default();
 
     // Start from the far end of each snapped edge.
     for edge in edges {
@@ -110,7 +110,7 @@ pub fn search(
 /// Tile cache shared across every search from one origin. Nothing is evicted.
 pub struct CachedGraphReader {
     graph_reader: GraphReader,
-    tiles: FxHashMap<GraphId, GraphTile>,
+    tiles: FxHashMap<TileId, GraphTile>,
 }
 
 impl CachedGraphReader {

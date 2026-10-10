@@ -1,6 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
-use valhalla::{Config, ConfigBuilder, GraphId, GraphReader, LiveTraffic};
+use valhalla::{Config, ConfigBuilder, GraphReader, LiveTraffic, TileId};
 
 fn edgeinfo(c: &mut Criterion) {
     let config = Config::from_tile_extract("./tests/andorra/tiles.tar").unwrap();
@@ -50,7 +50,7 @@ fn write_traffic(c: &mut Criterion) {
 
     // find a tile the the most edges
     let mut max_edges = 0;
-    let mut max_tile_id = GraphId::default();
+    let mut max_tile_id = TileId::default();
     for tile_id in graph_reader.tiles() {
         let tile = graph_reader.graph_tile(tile_id).unwrap();
 

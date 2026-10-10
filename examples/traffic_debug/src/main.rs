@@ -19,7 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser, Subcommand};
-use valhalla::{ConfigBuilder, GraphId, GraphReader, LiveTraffic, TrafficSegment};
+use valhalla::{ConfigBuilder, GraphId, GraphReader, LiveTraffic, TileId, TrafficSegment};
 
 const SEC_5M: u64 = 5 * 60;
 const SEC_30M: u64 = 30 * 60;
@@ -189,13 +189,13 @@ fn cmd_inspect(reader: &GraphReader, tile_id_arg: &str) -> Result<()> {
     Ok(())
 }
 
-fn print_edges_table(tile_id: GraphId, edges: &[LiveTraffic], graph_tile: &valhalla::GraphTile) {
+fn print_edges_table(tile_id: TileId, edges: &[LiveTraffic], graph_tile: &valhalla::GraphTile) {
     let mut rows: Vec<EdgeRow> = Vec::new();
     for (idx, live) in edges.iter().enumerate() {
         if live.speed().is_none() {
             continue; // no reading - nothing to show
         }
-        let edge_id = match GraphId::from_parts(tile_id.level(), tile_id.tileid(), idx as u32) {
+        let edge_id = match tile_id.graph_id(idx as u32) {
             Some(g) => g,
             None => continue,
         };
@@ -393,7 +393,7 @@ fn format_congestion(live: LiveTraffic) -> String {
     cells.join("/")
 }
 
-fn parse_tile_id(s: &str) -> Result<GraphId> {
+fn parse_tile_id(s: &str) -> Result<TileId> {
     let s = s.trim();
     if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
         let value =
@@ -402,33 +402,34 @@ fn parse_tile_id(s: &str) -> Result<GraphId> {
         if g.id() != 0 {
             bail!("expected tile id, got edge id (raw value resolves to {g})");
         }
-        return Ok(g);
+        return Ok(g.tile());
     }
     let parts: Vec<&str> = s.split('/').collect();
     match parts.as_slice() {
-        [level, tileid] => to_graph_id(level, tileid, "0"),
-        [level, tileid, id] => {
+        [level, tile_index] => Ok(to_graph_id(level, tile_index, "0")?.tile()),
+        [level, tile_index, id] => {
             if *id != "0" {
                 bail!("expected tile id, got edge id (L/T/I with I != 0); got {s:?}");
             }
-            to_graph_id(level, tileid, "0")
+            Ok(to_graph_id(level, tile_index, "0")?.tile())
         }
         _ => bail!("expected `L/T` or `L/T/0` (got {s:?})"),
     }
 }
 
-fn to_graph_id(level: &str, tileid: &str, id: &str) -> Result<GraphId> {
+fn to_graph_id(level: &str, tile_index: &str, id: &str) -> Result<GraphId> {
     let level: u8 = level
         .parse()
         .with_context(|| format!("invalid level {level:?}"))?;
-    let tileid: u32 = tileid
+    let tile_index: u32 = tile_index
         .parse()
-        .with_context(|| format!("invalid tile id {tileid:?}"))?;
+        .with_context(|| format!("invalid tile index {tile_index:?}"))?;
     let id: u32 = id
         .parse()
         .with_context(|| format!("invalid edge id {id:?}"))?;
-    GraphId::from_parts(level, tileid, id)
-        .ok_or_else(|| anyhow!("invalid graph id parts: level={level} tileid={tileid} id={id}"))
+    GraphId::from_parts(level, tile_index, id).ok_or_else(|| {
+        anyhow!("invalid graph id parts: level={level} tile_index={tile_index} id={id}")
+    })
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -625,7 +626,7 @@ fn parse_graph_id(s: &str) -> Result<GraphId> {
     }
     let parts: Vec<&str> = s.split('/').collect();
     match parts.as_slice() {
-        [level, tileid, id] => to_graph_id(level, tileid, id),
+        [level, tile_index, id] => to_graph_id(level, tile_index, id),
         _ => bail!("expected `L/T/I` (got {s:?})"),
     }
 }
@@ -801,11 +802,11 @@ mod tests {
     #[test]
     fn parse_tile_id_forms() {
         // Accepts `L/T`, `L/T/0` and hex; rejects nonzero edge ids and garbage.
-        let g = parse_tile_id("2/756425").unwrap();
-        assert_eq!((g.level(), g.tileid(), g.id()), (2, 756_425, 0));
-        assert_eq!(parse_tile_id("2/756425/0").unwrap().id(), 0);
-        let g = parse_tile_id("0x0").unwrap();
-        assert_eq!((g.level(), g.tileid(), g.id()), (0, 0, 0));
+        let tile = parse_tile_id("2/756425").unwrap();
+        assert_eq!((tile.level(), tile.tile_index()), (2, 756_425));
+        assert_eq!(parse_tile_id("2/756425/0").unwrap(), tile);
+        let tile = parse_tile_id("0x0").unwrap();
+        assert_eq!((tile.level(), tile.tile_index()), (0, 0));
         let err = parse_tile_id("2/756425/42").unwrap_err().to_string();
         assert!(err.contains("expected tile id"), "got: {err}");
         for bad in ["", "abc", "2/", "2/a/0"] {
@@ -818,11 +819,11 @@ mod tests {
         // Requires `L/T/I` (tile-only form is rejected); hex round-trips.
         assert!(parse_graph_id("2/756425").is_err());
         let g = parse_graph_id("2/756425/42").unwrap();
-        assert_eq!((g.level(), g.tileid(), g.id()), (2, 756_425, 42));
+        assert_eq!((g.level(), g.tile_index(), g.id()), (2, 756_425, 42));
         let hex = GraphId::from_parts(2, 756_425, 42).unwrap();
         let parsed = parse_graph_id(&format!("0x{:x}", hex.value)).unwrap();
         assert_eq!(
-            (parsed.level(), parsed.tileid(), parsed.id()),
+            (parsed.level(), parsed.tile_index(), parsed.id()),
             (2, 756_425, 42)
         );
     }

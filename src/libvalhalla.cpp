@@ -46,18 +46,18 @@ std::shared_ptr<TileSet> new_tileset(const boost::property_tree::ptree& pt) {
   return std::make_shared<TileSet>(std::move(tile_set));
 }
 
-rust::Vec<baldr::GraphId> TileSet::tiles() const {
-  rust::vec<baldr::GraphId> result;
+rust::Vec<TileId> TileSet::tiles() const {
+  rust::Vec<TileId> result;
   result.reserve(tiles_.size());
   for (const auto& tile : tiles_) {
-    result.push_back(baldr::GraphId(tile.first));
+    result.push_back(TileId{.value = baldr::GraphId(tile.first).tile_value()});
   }
   return result;
 }
 
-rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
-                                                 uint8_t level) const {
-  rust::vec<baldr::GraphId> result;
+rust::Vec<TileId> TileSet::tiles_in_bbox(float min_lat, float min_lon, float max_lat, float max_lon,
+                                         uint8_t level) const {
+  rust::Vec<TileId> result;
   if (level >= baldr::TileHierarchy::levels().size()) {
     return result;
   }
@@ -70,15 +70,15 @@ rust::vec<baldr::GraphId> TileSet::tiles_in_bbox(float min_lat, float min_lon, f
     const baldr::GraphId graph_id(tile_id, level, 0);
     // List only tiles that we have
     if (tiles_.find(graph_id.tile_base()) != tiles_.end()) {
-      result.push_back(graph_id);
+      result.push_back(TileId{.value = graph_id.tile_value()});
     }
   }
   return result;
 }
 
 /// Part of the [`baldr::GraphReader::GetGraphTile()`] that gets tile from mmap file
-const baldr::GraphTile* TileSet::get_graph_tile(baldr::GraphId id) const {
-  auto base = id.tile_base();
+const baldr::GraphTile* TileSet::get_graph_tile(TileId id) const {
+  const baldr::GraphId base(id.value);
 
   auto tile_it = tiles_.find(base);
   if (tile_it == tiles_.end()) {
@@ -95,8 +95,8 @@ const baldr::GraphTile* TileSet::get_graph_tile(baldr::GraphId id) const {
   return ptr.detach();
 }
 
-TrafficTile TileSet::get_traffic_tile(baldr::GraphId id) const {
-  auto base = id.tile_base();
+TrafficTile TileSet::get_traffic_tile(TileId id) const {
+  const baldr::GraphId base(id.value);
   auto traffic_it = traffic_tiles_.find(base);
   if (traffic_it == traffic_tiles_.end()) {
     throw std::runtime_error("No traffic tile for the given id");
@@ -120,11 +120,11 @@ TrafficTile TileSet::get_traffic_tile(baldr::GraphId id) const {
 }
 
 uint64_t TileSet::dataset_id() const {
-  if (auto it = tiles_.begin(); it != tiles_.end()) {
-    return get_graph_tile(baldr::GraphId(it->first))->header()->dataset_id();
-  } else {
-    return 0;
+  // Every tile starts with its header, so read it in place rather than building a tile around it.
+  if (auto it = tiles_.begin(); it != tiles_.end() && it->second.second >= sizeof(baldr::GraphTileHeader)) {
+    return reinterpret_cast<const baldr::GraphTileHeader*>(it->second.first)->dataset_id();
   }
+  return 0;
 }
 
 LatLon node_latlon(const baldr::GraphTile& tile, const baldr::NodeInfo& node) {
