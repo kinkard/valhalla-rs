@@ -19,9 +19,7 @@ impl LiveTraffic {
     /// Max raw 6-bit congestion; `1..=63` maps to `[0.0, 1.0]`, `0` = unknown. Mirrors `MAX_CONGESTION_VAL` in `traffictile.h`.
     const MAX_CONGESTION: u8 = 63;
 
-    /// Constructs a `LiveTraffic` instance from its raw `u64` bit representation.
-    /// The bit layout of the `u64` value must match the format of the
-    /// [`valhalla::baldr::TrafficSpeed`] struct in the C++ Valhalla library.
+    /// Constructs a `LiveTraffic` from the raw bits of [`valhalla::baldr::TrafficSpeed`].
     ///
     /// [`valhalla::baldr::TrafficSpeed`]: https://github.com/valhalla/valhalla/blob/master/valhalla/baldr/traffictile.h
     #[inline(always)]
@@ -29,9 +27,7 @@ impl LiveTraffic {
         Self(value)
     }
 
-    /// Returns the raw `u64` bit representation of the traffic data.
-    /// The bit layout of the returned value is defined by the
-    /// [`valhalla::baldr::TrafficSpeed`] struct in the C++ Valhalla library.
+    /// Raw bits, laid out as [`valhalla::baldr::TrafficSpeed`].
     ///
     /// [`valhalla::baldr::TrafficSpeed`]: https://github.com/valhalla/valhalla/blob/master/valhalla/baldr/traffictile.h
     #[inline(always)]
@@ -56,35 +52,25 @@ impl LiveTraffic {
         subsegment_speeds: [u8; 3],
         breakpoints: [u8; 2],
     ) -> Self {
-        let overall_encoded = (overall_speed >> 1) as u64;
-        let speed1_encoded = (subsegment_speeds[0] >> 1) as u64;
-        let speed2_encoded = (subsegment_speeds[1] >> 1) as u64;
-        let speed3_encoded = (subsegment_speeds[2] >> 1) as u64;
-        let bp1 = breakpoints[0] as u64;
-        let bp2 = breakpoints[1] as u64;
-
-        Self(
-            overall_encoded |        // overall_encoded_speed at bit 0
-            (speed1_encoded << 7) |  // encoded_speed1 at bit 7
-            (speed2_encoded << 14) | // encoded_speed2 at bit 14
-            (speed3_encoded << 21) | // encoded_speed3 at bit 21
-            (bp1 << 28) |            // breakpoint1 at bit 28
-            (bp2 << 36), // breakpoint2 at bit 36
-        )
+        Self(0)
+            .with_field(0, 7, (overall_speed >> 1) as u64)
+            .with_field(7, 7, (subsegment_speeds[0] >> 1) as u64)
+            .with_field(14, 7, (subsegment_speeds[1] >> 1) as u64)
+            .with_field(21, 7, (subsegment_speeds[2] >> 1) as u64)
+            .with_field(28, 8, breakpoints[0] as u64)
+            .with_field(36, 8, breakpoints[1] as u64)
     }
 
     /// Sets the spare bit to the given value, returning a new `LiveTraffic` instance.
     #[inline(always)]
     pub const fn with_spare(self, spare: bool) -> Self {
-        let cleared = self.0 & !(1u64 << 63); // Clear the spare bit
-        let spare_bit = (spare as u64) << 63;
-        Self(cleared | spare_bit)
+        self.with_field(63, 1, spare as u64)
     }
 
     /// Gets the value of the spare bit.
     #[inline(always)]
     pub const fn spare(&self) -> bool {
-        self.0 & (1 << 63) != 0
+        self.field(63, 1) != 0
     }
 
     /// Overall speed of the edge in km/h - the value Valhalla costing consumes; see
@@ -98,53 +84,75 @@ impl LiveTraffic {
     /// ```
     #[inline(always)]
     pub const fn speed(&self) -> Option<u8> {
-        let overall_encoded = (self.0 & 0x7F) as u8; // bits 0..=6
-        let breakpoint1 = ((self.0 >> 28) & 0xFF) as u8; // bits 28..=35
-        if breakpoint1 == 0 || overall_encoded == Self::UNKNOWN_SPEED {
+        let overall_encoded = self.field(0, 7);
+        if self.field(28, 8) == 0 || overall_encoded == Self::UNKNOWN_SPEED {
             None
         } else {
             Some(overall_encoded << 1)
         }
     }
 
-    /// Live-traffic detail as 1-3 contiguous [`TrafficSegment`]s in edge direction; a uniform record
-    /// yields one segment `(0.0, 1.0)`. Empty when [`LiveTraffic::speed()`] is `None`; coverage may
-    /// end before the edge does.
+    /// Portions of the edge with a live speed, in edge direction; a uniform record yields one
+    /// segment `(0.0, 1.0)`. Portions without a speed are skipped, leaving gaps between ranges.
+    /// Empty when [`LiveTraffic::speed()`] is `None`.
     #[inline(always)]
-    pub fn segments(&self) -> TrafficSegments {
-        TrafficSegments {
-            bits: self.0,
-            index: 0,
-        }
+    pub fn segments(&self) -> impl Iterator<Item = TrafficSegment> {
+        let traffic = *self;
+        let (breakpoint1, breakpoint2) = (self.field(28, 8), self.field(36, 8));
+        let count = if self.speed().is_some() { 3 } else { 0 };
+        // Segments exist only while the fences strictly advance, which covers uniform records
+        // (`breakpoint1 == 255`), truncated coverage and garbage encodings alike.
+        (0..count)
+            .zip([
+                (0, breakpoint1),
+                (breakpoint1, breakpoint2),
+                (breakpoint2, 255),
+            ])
+            .take_while(|(_, (start, end))| start < end)
+            .filter_map(move |(i, (start, end))| {
+                let speed = traffic.field(7 + 7 * i, 7);
+                (speed != Self::UNKNOWN_SPEED).then(|| TrafficSegment {
+                    range: (start as f32 / 255.0, end as f32 / 255.0),
+                    speed: speed << 1,
+                    congestion: decode_congestion(traffic.field(44 + 6 * i, 6)),
+                })
+            })
     }
 
     /// Whether the edge references incidents in the corresponding incident tile.
     /// Meaningful even without a speed reading.
     #[inline(always)]
     pub const fn has_incidents(&self) -> bool {
-        self.0 & (1 << 62) != 0
+        self.field(62, 1) != 0
     }
 
     /// Sets the per-segment congestion (`[0.0, 1.0]` clamped, `None` = unknown), preserving all other
-    /// bits; read back via [`TrafficSegment::congestion`]. Note: `Some(1.0)` is the wire's *closed*
-    /// marker - that segment reads back with `speed == Some(0)` (unless its speed is unknown - `None` wins).
+    /// bits; read back via [`TrafficSegment::congestion`]. Note: `Some(1.0)` marks the segment closed.
     #[inline(always)]
     pub fn with_congestion(self, congestion: [Option<f32>; 3]) -> Self {
-        // Clear the three 6-bit congestion fields (bits 44..=61), preserving everything else.
-        let cleared = self.0 & !(0x3_FFFFu64 << 44);
-        let c1 = encode_congestion(congestion[0]);
-        let c2 = encode_congestion(congestion[1]);
-        let c3 = encode_congestion(congestion[2]);
-        Self(cleared | (c1 << 44) | (c2 << 50) | (c3 << 56))
+        self.with_field(44, 6, encode_congestion(congestion[0]))
+            .with_field(50, 6, encode_congestion(congestion[1]))
+            .with_field(56, 6, encode_congestion(congestion[2]))
     }
 
     /// Sets or clears the incidents bit, preserving all other bits. Referencing a real incident
     /// tile is the caller's responsibility.
     #[inline(always)]
     pub const fn with_incidents(self, has_incidents: bool) -> Self {
-        let cleared = self.0 & !(1u64 << 62); // Clear the incidents bit
-        let incidents_bit = (has_incidents as u64) << 62;
-        Self(cleared | incidents_bit)
+        self.with_field(62, 1, has_incidents as u64)
+    }
+
+    /// `width` bits of the record starting at bit `offset`.
+    #[inline(always)]
+    const fn field(&self, offset: u32, width: u32) -> u8 {
+        ((self.0 >> offset) & ((1 << width) - 1)) as u8
+    }
+
+    /// The record with `width` bits starting at bit `offset` replaced by `value`.
+    #[inline(always)]
+    const fn with_field(self, offset: u32, width: u32, value: u64) -> Self {
+        let mask = ((1 << width) - 1) << offset;
+        Self((self.0 & !mask) | ((value << offset) & mask))
     }
 }
 
@@ -154,97 +162,20 @@ impl LiveTraffic {
 pub struct TrafficSegment {
     /// Portion of the edge this segment covers, as fractions of edge length `(start, end)`, `0.0..=1.0`.
     pub range: (f32, f32),
-    /// Speed in km/h; `None` = no data for this portion (wins over congestion-closed), `Some(0)` =
-    /// closed (also from congestion `1.0`). Guard `kph > 0` before dividing - closed is not "slow".
-    pub speed: Option<u8>,
-    /// Congestion level `0.0..=1.0`; `None` = unknown. `1.0` also folds `speed` to `Some(0)` (closed).
+    /// Speed in km/h; `0` = closed. Guard `kph > 0` before dividing - closed is not "slow".
+    pub speed: u8,
+    /// Congestion level `0.0..=1.0`; `None` = unknown. `1.0` marks the segment closed whatever its
+    /// speed, as C++ `closed(subsegment)` does.
     pub congestion: Option<f32>,
 }
 
-/// Iterator over the 1-3 [`TrafficSegment`]s of a [`LiveTraffic`] record.
-/// Decodes lazily from a copied `u64` - no allocation, detached from the memory-mapped tile.
-#[derive(Clone, Debug)]
-pub struct TrafficSegments {
-    /// Raw record bits, copied at [`LiveTraffic::segments()`] time.
-    bits: u64,
-    /// Next segment index to yield.
-    index: u8,
-}
-
-impl Iterator for TrafficSegments {
-    type Item = TrafficSegment;
-
-    fn next(&mut self) -> Option<TrafficSegment> {
-        let segment = decode_segment(self.bits, self.index)?;
-        self.index += 1;
-        Some(segment)
-    }
-}
-
-impl std::iter::FusedIterator for TrafficSegments {}
-
-/// Decodes segment `i` of a record, or `None` when it does not exist - the single place that knows
-/// the segment layout. Segment 0 exists iff the record has a reading; segments exist only while the
-/// breakpoint fences strictly advance, which uniformly handles uniform records (`breakpoint1 == 255`),
-/// truncated coverage (`breakpoint2 <= breakpoint1`), and garbage encodings.
-fn decode_segment(bits: u64, i: u8) -> Option<TrafficSegment> {
-    if i >= 3 || LiveTraffic::from_bits(bits).speed().is_none() {
-        return None;
-    }
-    let breakpoint1 = ((bits >> 28) & 0xFF) as u8; // bits 28..=35
-    let breakpoint2 = ((bits >> 36) & 0xFF) as u8; // bits 36..=43
-    let fences = [
-        (0, breakpoint1),
-        (breakpoint1, breakpoint2),
-        (breakpoint2, 255),
-    ];
-    if fences[..=i as usize]
-        .iter()
-        .any(|(start, end)| end <= start)
-    {
-        return None;
-    }
-    let (start, end) = fences[i as usize];
-    let speed_raw = ((bits >> (7 + 7 * i)) & 0x7F) as u8; // encoded_speed{1,2,3}
-    let congestion_raw = ((bits >> (44 + 6 * i)) & 0x3F) as u8; // congestion{1,2,3}
-    Some(TrafficSegment {
-        range: (start as f32 / 255.0, end as f32 / 255.0),
-        speed: decode_segment_speed(speed_raw, congestion_raw),
-        congestion: decode_congestion(congestion_raw as u64),
-    })
-}
-
-/// Decodes a segment's raw 7-bit speed and raw 6-bit congestion pair into its reading:
-/// - `None` when the speed holds the UNKNOWN sentinel (`127`) - partial coverage. Unknown speed
-///   wins over congestion-closed (unlike C++ `closed(subsegment)`, which reports sentinel + raw-63 as closed).
-/// - `Some(0)` (closed) when the congestion is raw `63` - the C++ `closed(subsegment)` semantic.
-/// - `Some(speed_raw << 1)` otherwise - a raw speed of `0` yields `Some(0)` (closed) naturally,
-///   the wire's own encoding of closure.
+/// Raw `1..=63` maps to `0.0..=1.0`, `0` = unknown.
 #[inline(always)]
-const fn decode_segment_speed(speed_raw: u8, congestion_raw: u8) -> Option<u8> {
-    if speed_raw == LiveTraffic::UNKNOWN_SPEED {
-        None
-    } else if congestion_raw == LiveTraffic::MAX_CONGESTION {
-        Some(0)
-    } else {
-        Some(speed_raw << 1)
-    }
+fn decode_congestion(raw: u8) -> Option<f32> {
+    (raw != 0).then(|| (raw as f32 - 1.0) / (LiveTraffic::MAX_CONGESTION as f32 - 1.0))
 }
 
-/// Decodes a 6-bit raw congestion value into a normalized `[0.0, 1.0]` fraction, or `None` when
-/// unknown (raw `0`).
-#[inline(always)]
-fn decode_congestion(raw: u64) -> Option<f32> {
-    if raw == 0 {
-        None
-    } else {
-        Some((raw as f32 - 1.0) / (LiveTraffic::MAX_CONGESTION as f32 - 1.0))
-    }
-}
-
-/// Encodes a normalized `[0.0, 1.0]` congestion fraction into its 6-bit raw value, the inverse of
-/// [`decode_congestion`]. `None` and non-finite values map to raw `0` (unknown); finite `Some(f)`
-/// clamps to `[0.0, 1.0]` and maps to `round(f * 62) + 1` in `1..=63`.
+/// The inverse of [`decode_congestion`], clamping to `0.0..=1.0`; non-finite values are unknown.
 #[inline(always)]
 fn encode_congestion(congestion: Option<f32>) -> u64 {
     match congestion {
@@ -447,39 +378,37 @@ mod tests {
         // covering the whole edge.
         assert_eq!(
             LiveTraffic::CLOSED.segments().collect::<Vec<_>>(),
-            [segment((0.0, 1.0), Some(0), None)]
+            [segment((0.0, 1.0), 0, None)]
         );
         assert_eq!(
             LiveTraffic::from_uniform_speed(72)
                 .segments()
                 .collect::<Vec<_>>(),
-            [segment((0.0, 1.0), Some(72), None)]
+            [segment((0.0, 1.0), 72, None)]
         );
 
-        // Segmented record exercising all three per-segment states: moving, closed (speed 0),
-        // and no-data (254 kph in -> the encoded 127 UNKNOWN sentinel).
+        // Segmented record with a moving, a closed (speed 0) and a no-data portion (254 kph in ->
+        // the encoded 127 UNKNOWN sentinel), which is skipped.
         let (bp1, bp2) = (100.0 / 255.0, 200.0 / 255.0);
         assert_eq!(
             LiveTraffic::from_segmented_speeds(72, [50, 0, 254], [100, 200])
                 .segments()
                 .collect::<Vec<_>>(),
-            [
-                segment((0.0, bp1), Some(50), None),
-                segment((bp1, bp2), Some(0), None),
-                segment((bp2, 1.0), None, None),
-            ]
+            [segment((0.0, bp1), 50, None), segment((bp1, bp2), 0, None),]
         );
 
         // All three subsegments unknown while the overall speed is known: the overall summary
-        // stays authoritative.
+        // stays authoritative, with no segments to detail it.
         let all_unknown = LiveTraffic::from_segmented_speeds(72, [254, 254, 254], [100, 200]);
         assert_eq!(all_unknown.speed(), Some(72));
-        assert!(
-            all_unknown
+        assert_eq!(all_unknown.segments().count(), 0);
+        // A gap in the middle keeps the segments on both sides of it.
+        assert_eq!(
+            LiveTraffic::from_segmented_speeds(72, [50, 254, 30], [100, 200])
                 .segments()
-                .all(|segment| segment.speed.is_none())
+                .collect::<Vec<_>>(),
+            [segment((0.0, bp1), 50, None), segment((bp2, 1.0), 30, None)]
         );
-        assert_eq!(all_unknown.segments().count(), 3);
 
         // Fence boundaries: breakpoint2 == 255 ends the record at two segments; breakpoint2 <=
         // breakpoint1 (0, equal, or garbage out-of-order) truncates coverage to a single segment.
@@ -487,19 +416,15 @@ mod tests {
         assert_eq!(
             two.segments().collect::<Vec<_>>(),
             [
-                segment((0.0, 127.0 / 255.0), Some(60), None),
-                segment((127.0 / 255.0, 1.0), Some(80), None),
+                segment((0.0, 127.0 / 255.0), 60, None),
+                segment((127.0 / 255.0, 1.0), 80, None),
             ]
         );
         for breakpoints in [[127, 0], [100, 80], [100, 100]] {
             let truncated = LiveTraffic::from_segmented_speeds(72, [60, 80, 100], breakpoints);
             assert_eq!(
                 truncated.segments().collect::<Vec<_>>(),
-                [segment(
-                    (0.0, breakpoints[0] as f32 / 255.0),
-                    Some(60),
-                    None
-                )],
+                [segment((0.0, breakpoints[0] as f32 / 255.0), 60, None)],
                 "breakpoints {breakpoints:?}"
             );
         }
@@ -507,12 +432,11 @@ mod tests {
             LiveTraffic::from_segmented_speeds(72, [60, 80, 100], [255, 255])
                 .segments()
                 .collect::<Vec<_>>(),
-            [segment((0.0, 1.0), Some(60), None)]
+            [segment((0.0, 1.0), 60, None)]
         );
 
-        // Congestion: raw 0 / 1 / 63 -> None / Some(0.0) / Some(1.0) per 6-bit field, and raw 63
-        // (== written 1.0) also folds that segment's speed to Some(0) = closed (C++
-        // `closed(subsegment)`) - unless the segment's speed is unknown, which wins.
+        // Congestion: raw 0 / 1 / 63 -> None / Some(0.0) / Some(1.0) per 6-bit field, leaving the
+        // speed as stored.
         let bits = LiveTraffic::from_segmented_speeds(72, [60, 80, 100], [100, 200]).to_bits();
         let record = LiveTraffic::from_bits(
             bits | (1u64 << 44) | ((LiveTraffic::MAX_CONGESTION as u64) << 56),
@@ -520,22 +444,11 @@ mod tests {
         assert_eq!(
             record.segments().collect::<Vec<_>>(),
             [
-                segment((0.0, bp1), Some(60), Some(0.0)),
-                segment((bp1, bp2), Some(80), None),
-                segment((bp2, 1.0), Some(0), Some(1.0)),
+                segment((0.0, bp1), 60, Some(0.0)),
+                segment((bp1, bp2), 80, None),
+                segment((bp2, 1.0), 100, Some(1.0)),
             ]
         );
-        let sentinel_and_congested =
-            LiveTraffic::from_segmented_speeds(72, [254, 50, 50], [100, 200]).with_congestion([
-                Some(1.0),
-                None,
-                None,
-            ]);
-        assert_eq!(
-            sentinel_and_congested.segments().next().unwrap(),
-            segment((0.0, bp1), None, Some(1.0))
-        );
-
         // with_congestion round-trip: quantized to 6 bits (step 1/62), so only exactly-representable
         // values (endpoints and 0.5) survive `==`; out-of-range clamps; non-finite is not a reading.
         let base = LiveTraffic::from_segmented_speeds(72, [60, 80, 100], [100, 200]);

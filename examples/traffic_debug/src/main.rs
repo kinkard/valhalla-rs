@@ -329,33 +329,27 @@ fn edge_use_str(u: valhalla::EdgeUse) -> &'static str {
     }
 }
 
-/// Speed cell: blank for no-reading/closed (flags carry "closed"); plain `{kph} kph` for uniform
-/// full coverage; else per-segment, e.g. `0-39%: 50 kph | 39-78%: closed | 78-100%: ?`.
+/// Speed cell: blank for no-reading/closed (flags carry "closed"); plain `{kph} kph` for a uniform
+/// record; else per-segment, e.g. `0-39%: 50 kph | 39-78%: closed`.
 fn format_speed(live: LiveTraffic) -> String {
-    let kph = match live.speed() {
-        None | Some(0) => return String::new(), // no reading / closed - flags column carries "closed"
-        Some(kph) => kph,
-    };
-    let segments: Vec<TrafficSegment> = live.segments().collect();
-    if let [segment] = segments.as_slice()
-        && segment.range == (0.0, 1.0)
-    {
-        // Uniform full coverage - the overall kph is the authoritative summary.
-        return format!("{kph} kph");
+    if matches!(live.speed(), None | Some(0)) {
+        return String::new(); // no reading / closed - flags column carries "closed"
     }
-    let cells: Vec<String> = segments.iter().map(render_segment).collect();
+    let cells: Vec<String> = live.segments().map(render_segment).collect();
     cells.join(" | ")
 }
 
-/// One segment as `start-end%: state` (range as percents of edge length), e.g. `39-78%: closed`.
-fn render_segment(segment: &TrafficSegment) -> String {
+/// One segment as `start-end%: state` (range as percents of edge length), e.g. `39-78%: closed`;
+/// just the state when the segment covers the whole edge.
+fn render_segment(segment: TrafficSegment) -> String {
     let state = match segment.speed {
-        None => "?".to_string(), // no data for this portion (partial coverage)
-        Some(0) => "closed".to_string(),
-        Some(kph) => format!("{kph} kph"),
+        0 => "closed".to_string(),
+        kph => format!("{kph} kph"),
     };
-    let (start, end) = segment.range;
-    format!("{:.0}-{:.0}%: {state}", start * 100.0, end * 100.0)
+    match segment.range {
+        (0.0, 1.0) => state,
+        (start, end) => format!("{:.0}-{:.0}%: {state}", start * 100.0, end * 100.0),
+    }
 }
 
 /// Flags cell: closed/segmented from the reading, plus the incidents and spare bits.
@@ -364,7 +358,7 @@ fn format_flags(live: LiveTraffic) -> String {
     if live.speed() == Some(0) {
         flags.push("closed");
     }
-    if live.segments().nth(1).is_some() {
+    if live.segments().count() > 1 {
         flags.push("segmented");
     }
     if live.has_incidents() {
@@ -379,13 +373,12 @@ fn format_flags(live: LiveTraffic) -> String {
 /// Congestion cell: one `0.00`..`1.00` value per segment joined with `/` (`-` = no data);
 /// blank when no segment carries congestion (incl. records without a reading - no segments).
 fn format_congestion(live: LiveTraffic) -> String {
-    let congestion: Vec<Option<f32>> = live.segments().map(|s| s.congestion).collect();
-    if congestion.iter().all(Option::is_none) {
+    if live.segments().all(|s| s.congestion.is_none()) {
         return String::new();
     }
-    let cells: Vec<String> = congestion
-        .iter()
-        .map(|c| match c {
+    let cells: Vec<String> = live
+        .segments()
+        .map(|s| match s.congestion {
             Some(f) => format!("{f:.2}"),
             None => "-".to_string(),
         })
@@ -459,7 +452,7 @@ fn summarize_traffic(edges: &[LiveTraffic]) -> TileSummary {
         if e.segments().any(|segment| segment.congestion.is_some()) {
             s.with_congestion += 1;
         }
-        if e.segments().nth(1).is_some() {
+        if e.segments().count() > 1 {
             s.segmented += 1;
         }
         match e.speed() {
@@ -897,7 +890,7 @@ mod tests {
         let segments: Vec<TrafficSegment> = live.segments().collect();
         assert_eq!(segments.len(), 1);
         assert_eq!(segments[0].range, (0.0, 1.0));
-        assert_eq!(segments[0].speed, Some(72));
+        assert_eq!(segments[0].speed, 72);
         // round(0.25 * 62) + 1 = 17 -> (17 - 1) / 62 ~= 0.258
         let got = segments[0].congestion.expect("congestion set");
         assert!((got - 0.25).abs() < 0.02, "got {got}");
@@ -918,24 +911,21 @@ mod tests {
         assert_eq!(format_speed(LiveTraffic::from_uniform_speed(48)), "48 kph");
         assert_eq!(format_speed(LiveTraffic::UNKNOWN), "");
         assert_eq!(format_speed(LiveTraffic::CLOSED), "");
-        // Congestion 1.0 folds the segment to closed, but the edge keeps its overall kph.
+        // Congestion 1.0 leaves the speed as stored.
         let congested =
             LiveTraffic::from_uniform_speed(72).with_congestion([Some(1.0), None, None]);
         assert_eq!(congested.speed(), Some(72));
         assert_eq!(format_speed(congested), "72 kph");
 
-        // Per-segment form: fences as percents, "closed" and "?" (no data) per segment; truncated
-        // coverage (garbage bp2 < bp1) omits the uncovered tail.
+        // Per-segment form: fences as percents and "closed" per segment; portions without a speed
+        // and truncated coverage (garbage bp2 < bp1) are omitted.
         let seg = LiveTraffic::from_segmented_speeds(54, [54, 32, 54], [80, 180]);
         assert_eq!(
             format_speed(seg),
             "0-31%: 54 kph | 31-71%: 32 kph | 71-100%: 54 kph"
         );
         let states = LiveTraffic::from_segmented_speeds(72, [50, 0, 254], [100, 200]);
-        assert_eq!(
-            format_speed(states),
-            "0-39%: 50 kph | 39-78%: closed | 78-100%: ?"
-        );
+        assert_eq!(format_speed(states), "0-39%: 50 kph | 39-78%: closed");
         let truncated = LiveTraffic::from_segmented_speeds(72, [50, 60, 70], [100, 80]);
         assert_eq!(format_speed(truncated), "0-39%: 50 kph");
     }
@@ -966,8 +956,7 @@ mod tests {
         // Uniform record via the demonstrated write path: one segment -> one cell.
         let live = build_live_speed(48, false, Some(0.5), false);
         assert_eq!(format_congestion(live), "0.50");
-        // Per-segment cells; `-` marks segments without data; the 1.0 also folds that segment's
-        // reading to closed, but the value is still reported.
+        // Per-segment cells; `-` marks segments without data.
         let live = LiveTraffic::from_segmented_speeds(72, [50, 60, 70], [100, 200])
             .with_congestion([Some(0.0), None, Some(1.0)]);
         assert_eq!(format_congestion(live), "0.00/-/1.00");

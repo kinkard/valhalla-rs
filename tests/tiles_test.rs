@@ -531,10 +531,10 @@ fn live_traffic() {
         let segments: Vec<_> = live.segments().collect();
         assert_eq!(segments.len(), 3);
         // encoded speeds are stored with 2km/h precision (value >> 1 on write, << 1 on read);
-        // 1 km/h rounds down to encoded 0, which reads back as a closed segment (Some(0)).
-        assert_eq!(segments[0].speed, Some(0));
-        assert_eq!(segments[1].speed, Some(2));
-        assert_eq!(segments[2].speed, Some(2));
+        // 1 km/h rounds down to encoded 0, which reads back as a closed segment (0).
+        assert_eq!(segments[0].speed, 0);
+        assert_eq!(segments[1].speed, 2);
+        assert_eq!(segments[2].speed, 2);
         // breakpoints [127, 128] become contiguous fractional ranges ending at 1.0.
         assert_eq!(segments[0].range, (0.0, 127.0 / 255.0));
         assert_eq!(segments[1].range, (127.0 / 255.0, 128.0 / 255.0));

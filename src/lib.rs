@@ -30,7 +30,7 @@ pub use ffi::TimeZoneInfo;
 pub use ffi::TrafficTile;
 pub use ffi::decode_weekly_speeds;
 pub use ffi::encode_weekly_speeds;
-pub use traffic::{LiveTraffic, TrafficSegment, TrafficSegments};
+pub use traffic::{LiveTraffic, TrafficSegment};
 
 #[cxx::bridge]
 mod ffi {
