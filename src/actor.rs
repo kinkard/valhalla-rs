@@ -34,8 +34,8 @@ mod ffi {
         fn centroid(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
         fn status(self: Pin<&mut Actor>, request: &[u8]) -> Result<Response>;
 
-        /// Returns [`proto::Options`] object serialized as C++ `std::string` from a Valhalla JSON string.
-        fn parse_json_request(json: &str, action: i32) -> Result<UniquePtr<CxxString>>;
+        /// Returns [`proto::Api`] object serialized as C++ `std::string` from a Valhalla JSON string.
+        fn parse_json_api(json: &str, action: i32) -> Result<UniquePtr<CxxString>>;
     }
 }
 
@@ -435,38 +435,44 @@ impl Actor {
         Ok(Response::from(result?))
     }
 
-    /// Helper function to convert a Valhalla JSON string into Valhalla PBF request as [`proto::Options`] object.
-    /// This function is not optimized for performance and should be considered as a convenience method.
-    /// For best performance construct [`proto::Options`] directly if possible.
+    /// Converts a Valhalla JSON request into [`proto::Options`], dropping the parsing warnings that
+    /// [`Actor::parse_json_api()`] keeps. For best performance, build [`proto::Options`] directly.
     pub fn parse_json_request(
         json: &str,
         action: proto::options::Action,
     ) -> Result<proto::Options, Error> {
+        Ok(Self::parse_json_api(json, action)?
+            .options
+            .unwrap_or_default())
+    }
+
+    /// Converts a Valhalla JSON request into [`proto::Api`] the way the Valhalla service does: the request goes to
+    /// [`proto::Api::options`] and parsing warnings, e.g. for out-of-range options, to [`proto::Info::warnings`].
+    pub fn parse_json_api(json: &str, action: proto::options::Action) -> Result<proto::Api, Error> {
         if json.is_empty() {
-            // Empty string is a special for Valhalla, so we should return an error here.
+            // Valhalla parses an empty string as an empty JSON object instead of failing, so reject it here.
             return Err(Error("Failed to parse json request".into()));
         }
 
-        let cxx_string = ffi::parse_json_request(json, action as i32)?;
-        let mut options = proto::Options::decode(cxx_string.as_bytes())
+        let cxx_string = ffi::parse_json_api(json, action as i32)?;
+        let mut api = proto::Api::decode(cxx_string.as_bytes())
             .map_err(|err| Error(err.to_string().into()))?;
+        let Some(options) = api.options.as_mut() else {
+            return Ok(api);
+        };
 
-        // Workaround for "ignore_closures in costing and exclude_closures in search_filter cannot both be specified"
-        // that is happened because this check is happens before that value is set to the default false and processing
-        // json request actually causes parsing function to be called twice because it parses and sets default values.
+        // Parsing sets `ignore_closures` and `exclude_closures`, which a re-parse rejects (error 143),
+        // so drop `ignore_closures` if it's the default `false`.
         for costing in options.costings.values_mut() {
             if let Some(proto::costing::HasOptions::Options(costing_options)) =
                 &mut costing.has_options
-            {
-                // If ignore_closures is false, we can clear it
-                if let Some(proto::costing::options::HasIgnoreClosures::IgnoreClosures(false)) =
+                && let Some(proto::costing::options::HasIgnoreClosures::IgnoreClosures(false)) =
                     costing_options.has_ignore_closures
-                {
-                    costing_options.has_ignore_closures = None;
-                }
+            {
+                costing_options.has_ignore_closures = None;
             }
         }
 
-        Ok(options)
+        Ok(api)
     }
 }
