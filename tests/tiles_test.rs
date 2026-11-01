@@ -72,7 +72,10 @@ fn graph_tile_can_outlive_reader() {
 
 #[test]
 fn traffic_tile_can_outlive_reader() {
-    let reader = andorra_reader(ANDORRA_TRAFFIC);
+    // other tests read the same traffic.tar, so write to a copy
+    let traffic_copy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::copy(ANDORRA_TRAFFIC, traffic_copy.path()).unwrap();
+    let reader = andorra_reader(traffic_copy.path().to_str().unwrap());
 
     let tile = reader.traffic_tile(reader.tiles()[0]).unwrap();
     tile.write_spare(1);
@@ -86,7 +89,6 @@ fn traffic_tile_can_outlive_reader() {
         1,
         "Tile should remain valid after reader is dropped"
     );
-    tile.write_spare(0); // cleanup
 }
 
 #[test]
@@ -122,11 +124,11 @@ fn tiles_in_bbox() {
     world_tiles.sort();
     assert_eq!(all_tiles, world_tiles);
 
-    let mut andorra_tiles: Vec<TileId> = (level::HIGHWAY..=level::LOCAL)
+    let mut bbox_tiles: Vec<TileId> = (level::HIGHWAY..=level::LOCAL)
         .flat_map(|level| reader.tiles_in_bbox(ANDORRA_BBOX.0, ANDORRA_BBOX.1, level))
         .collect();
-    andorra_tiles.sort();
-    assert_eq!(all_tiles, andorra_tiles);
+    bbox_tiles.sort();
+    assert_eq!(all_tiles, bbox_tiles);
 
     // And no other levels
     for level in [3, 7, u8::MAX] {
@@ -221,7 +223,7 @@ fn edges_in_tile() {
 
 #[test]
 fn live_traffic_without_traffic_extract() {
-    let reader = andorra_reader("tests/andorra/does-not-exist.tar");
+    let reader = andorra_reader("bad_path_to_traffic_extract");
 
     for tile_id in reader.tiles() {
         assert!(reader.traffic_tile(tile_id).is_none());
@@ -333,18 +335,10 @@ fn reverse_edge() {
 #[test]
 fn live_traffic() {
     // for this test we should work with copy of the traffic tar to avoid modifying the original one
-    let traffic_copy = "tests/andorra/traffic_copy.tar";
-    std::fs::copy(ANDORRA_TRAFFIC, traffic_copy).expect("Failed to copy traffic tar");
-    // Poor man's `defer`
-    struct Cleanup<'a>(&'a str);
-    impl<'a> Drop for Cleanup<'a> {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(self.0);
-        }
-    }
-    let _cleanup = Cleanup(traffic_copy);
+    let traffic_copy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::copy(ANDORRA_TRAFFIC, traffic_copy.path()).expect("Failed to copy traffic tar");
 
-    let reader = andorra_reader(traffic_copy);
+    let reader = andorra_reader(traffic_copy.path().to_str().unwrap());
 
     // find a tile with the most edges to have a good number of edges to test
     let tile_id = {
@@ -617,8 +611,14 @@ fn edge_info_shape() {
 
             // Andorra sits in a tight box, so a bad decode shows up immediately.
             for point in &shape {
-                assert!((42.4..42.7).contains(&point.0), "{point:?}");
-                assert!((1.4..1.8).contains(&point.1), "{point:?}");
+                assert!(
+                    (ANDORRA_BBOX.0.0..ANDORRA_BBOX.1.0).contains(&point.0),
+                    "{point:?}"
+                );
+                assert!(
+                    (ANDORRA_BBOX.0.1..ANDORRA_BBOX.1.1).contains(&point.1),
+                    "{point:?}"
+                );
             }
 
             // The shape spans the edge, so it ends at the edge's end node.

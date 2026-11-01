@@ -33,8 +33,8 @@ pub(crate) mod ffi {
 /// ```
 /// let config = valhalla::ConfigBuilder {
 ///     mjolnir: valhalla::config::Mjolnir {
-///         tile_extract: "./tests/andorra/tiles.tar".into(),
-///         traffic_extract: "./tests/andorra/traffic.tar".into(),
+///         tile_extract: "path/to/tiles.tar".into(),
+///         traffic_extract: "path/to/traffic.tar".into(),
 ///         ..Default::default()
 ///     },
 ///     ..Default::default()

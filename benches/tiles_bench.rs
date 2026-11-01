@@ -37,10 +37,13 @@ fn edgeinfo(c: &mut Criterion) {
 }
 
 fn write_traffic(c: &mut Criterion) {
+    // other tests read the same traffic.tar, so write to a copy
+    let traffic_copy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::copy("./tests/andorra/traffic.tar", traffic_copy.path()).unwrap();
     let config = ConfigBuilder {
         mjolnir: valhalla::config::Mjolnir {
             tile_extract: "./tests/andorra/tiles.tar".to_string(),
-            traffic_extract: "./tests/andorra/traffic.tar".to_string(),
+            traffic_extract: traffic_copy.path().to_str().unwrap().to_string(),
             ..Default::default()
         },
         ..Default::default()
