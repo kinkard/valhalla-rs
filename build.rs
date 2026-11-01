@@ -46,7 +46,7 @@ fn main() {
         .define("LOGGING_LEVEL", "WARN") // todo: Provide an API for setting custom loggers to Valhalla
         .build_target("valhalla")
         .build();
-    // Clean up temporarily created `valhalla/third_party/tz/leapseconds` to keep source tree clean.
+    // cmake generates this file in the source tree, which `cargo package` doesn't allow
     // N.B.: avoid adding `println!("cargo:rerun-if-changed=valhalla");` as this file will always trigger a rebuild.
     let _ = fs::remove_file("valhalla/third_party/tz/leapseconds");
 
@@ -103,13 +103,11 @@ fn main() {
         println!("cargo:rerun-if-changed=valhalla/proto/descriptors");
     }
 
-    // Generate `config_builder.rs` — typed Rust structs mirroring Valhalla's Python-defined config,
-    // with doc comments and `write_to_ptree` methods that populate C++ `boost::property_tree`
-    // directly via FFI (no JSON roundtrip).
+    // Typed config structs from the `config` and `help_text` dicts of valhalla_build_config
     let script = fs::read_to_string("valhalla/scripts/valhalla_build_config")
         .expect("Failed to read valhalla_build_config script");
-    let config = parse_valhalla_config(&script);
-    let help = parse_valhalla_help_text(&script);
+    let config = parse_py_dict(&script, "config");
+    let help = parse_py_dict(&script, "help_text");
 
     let code = generate_config_code(&config, &help);
     let out_dir = std::env::var("OUT_DIR").unwrap();
@@ -144,17 +142,15 @@ fn extract_includes(compile_commands: &Path, cpp_source: &str) -> Vec<String> {
 
     for i in 0..args.len() {
         if args[i].starts_with("-I") {
-            // Handle -I/path/to/include
             includes.push(args[i][2..].to_string());
         } else if args[i] == "-isystem" && i + 1 < args.len() {
-            // Handle -isystem /path/to/include
             includes.push(args[i + 1].to_string());
         }
     }
     includes
 }
 
-/// Check whether LLD is being used as the linker.
+/// Whether the linker can do cross-language LTO: always on macOS, elsewhere it has to be LLD.
 fn has_lld() -> bool {
     if std::env::var("TARGET").is_ok_and(|t| t.contains("apple-darwin")) {
         return true;
@@ -405,28 +401,13 @@ impl PyParser {
     }
 }
 
-/// Extracts the `config = { ... }` dictionary from `valhalla_build_config`.
-fn parse_valhalla_config(config_script: &str) -> PyValue {
-    let marker = "\nconfig = {";
-    let start = config_script
-        .find(marker)
-        .expect("No `config` dict in valhalla_build_config script");
-    let dict_start = start + "\nconfig = ".len();
-
-    let mut parser = PyParser::new(&config_script[dict_start..]);
-    parser.parse_value()
-}
-
-/// Extracts the `help_text = { ... }` dictionary — used for `///` doc comments.
-fn parse_valhalla_help_text(config_script: &str) -> PyValue {
-    let marker = "\nhelp_text = {";
-    let start = config_script
-        .find(marker)
-        .expect("No `nhelp_text` dict in valhalla_build_config script");
-    let dict_start = start + "\nhelp_text = ".len();
-
-    let mut parser = PyParser::new(&config_script[dict_start..]);
-    parser.parse_value()
+/// Parses the `name = { ... }` dict of `valhalla_build_config`.
+fn parse_py_dict(script: &str, name: &str) -> PyValue {
+    let marker = format!("\n{name} = ");
+    let start = script
+        .find(&format!("{marker}{{"))
+        .unwrap_or_else(|| panic!("No `{name}` dict in valhalla_build_config script"));
+    PyParser::new(&script[start + marker.len()..]).parse_value()
 }
 
 /// Walks the `help_text` tree by dotted path and returns the leaf string, if any.
@@ -494,18 +475,11 @@ fn rust_string_literal(s: &str) -> String {
 }
 
 fn rust_float_literal(f: f64) -> String {
-    if f.fract() == 0.0 && !f.is_infinite() && !f.is_nan() {
-        format!("{f:.1}")
-    } else {
-        format!("{f}")
-    }
+    format!("{f:?}")
 }
 
 fn struct_name_from_path(path: &[&str]) -> String {
-    path.iter()
-        .map(|s| to_pascal_case(s))
-        .collect::<Vec<_>>()
-        .join("")
+    path.iter().map(|s| to_pascal_case(s)).collect()
 }
 
 fn infer_list_type(items: &[PyValue]) -> String {
@@ -531,28 +505,20 @@ fn optional_rust_type(type_name: &str) -> String {
 }
 
 fn can_derive_default(entries: &[(String, PyValue)]) -> bool {
-    entries.iter().all(|(_, value)| {
-        match value {
-            PyValue::Dict(_) => true,         // Child structs can have Default
-            PyValue::Optional(_) => true,     // None is Default for Option<T>
-            PyValue::List(l) => l.is_empty(), // Empty vec is Default
-            PyValue::Str(s) => s.is_empty(),  // Empty string is Default for String
-            PyValue::Int(n) => *n == Default::default(),
-            PyValue::Float(f) => *f == Default::default(),
-            PyValue::Bool(b) => *b == Default::default(),
-        }
+    entries.iter().all(|(_, value)| match value {
+        PyValue::Dict(_) | PyValue::Optional(_) => true,
+        PyValue::List(l) => l.is_empty(),
+        PyValue::Str(s) => s.is_empty(),
+        PyValue::Int(n) => *n == 0,
+        PyValue::Float(f) => *f == 0.0,
+        PyValue::Bool(b) => !*b,
     })
 }
 
 fn default_value_expr(value: &PyValue, parent_path: &[&str], key: &str) -> String {
     match value {
         PyValue::Dict(_) => {
-            let child_path: Vec<&str> = parent_path
-                .iter()
-                .copied()
-                .chain(std::iter::once(key))
-                .collect();
-            let child_type = struct_name_from_path(&child_path);
+            let child_type = struct_name_from_path(&[parent_path, &[key]].concat());
             format!("{child_type}::default()")
         }
         PyValue::Str(s) => rust_string_literal(s),
@@ -581,13 +547,10 @@ fn list_default_expr(items: &[PyValue]) -> String {
     format!("vec![{}]", parts.join(", "))
 }
 
-/// Emits the full `config_builder.rs`: structs, Default impls, write_to_ptree
-/// methods, PtreePut trait, and ConfigBuilder::build(). Self-contained — the
-/// only external dependency is `ffi` and `Config` from config.rs.
+/// Contents of `config_builder.rs`, included by config.rs.
 fn generate_config_code(config: &PyValue, help: &PyValue) -> String {
     let mut output = String::new();
     if let PyValue::Dict(entries) = config {
-        // top comment for `ConfigBuilder` struct.
         output.push_str("/// Valhalla configuration builder.\n");
         output.push_str(
             "/// Auto-generated from `valhalla/scripts/valhalla_build_config` — do not edit.\n",
@@ -675,8 +638,8 @@ fn ptree_path(prefix: &str, key: &str) -> String {
 }
 "#;
 
-/// Emits one struct definition + Default impl + `write_to_ptree` method,
-/// recursing into child dicts first so nested types are defined before use.
+/// Emits the struct with its `Default` impl, unless it can be derived, and `write_to_ptree` method,
+/// then the same for its child dicts.
 fn generate_struct(
     output: &mut String,
     struct_name: &str,
@@ -684,10 +647,7 @@ fn generate_struct(
     path: &[&str],
     help: &PyValue,
 ) {
-    // Struct-level doc from __note__ in help_text
-    let mut note_path: Vec<&str> = path.to_vec();
-    note_path.push("__note__");
-    if let Some(note) = lookup_help(help, &note_path) {
+    if let Some(note) = lookup_help(help, &[path, &["__note__"]].concat()) {
         for line in note.lines() {
             output.push_str(&format!("/// {line}\n"));
         }
@@ -703,10 +663,7 @@ fn generate_struct(
 
     for (key, value) in entries {
         let field = rust_field_name(key);
-
-        // Field doc comment from help_text
-        let mut field_path: Vec<&str> = path.to_vec();
-        field_path.push(key.as_str());
+        let field_path = [path, &[key.as_str()]].concat();
         if let Some(doc) = lookup_help(help, &field_path) {
             for line in doc.lines() {
                 output.push_str(&format!("    /// {line}\n"));
@@ -715,12 +672,7 @@ fn generate_struct(
 
         match value {
             PyValue::Dict(_) => {
-                let child_path: Vec<&str> = path
-                    .iter()
-                    .copied()
-                    .chain(std::iter::once(key.as_str()))
-                    .collect();
-                let child_type = struct_name_from_path(&child_path);
+                let child_type = struct_name_from_path(&field_path);
                 output.push_str(&format!("    pub {field}: {child_type},\n"));
             }
             PyValue::Str(_) => output.push_str(&format!("    pub {field}: String,\n")),
@@ -739,7 +691,6 @@ fn generate_struct(
     }
     output.push_str("}\n\n");
 
-    // Default impl - only generate if we can't derive it
     if !can_derive {
         output.push_str(&format!("impl Default for {struct_name} {{\n"));
         output.push_str("    fn default() -> Self {\n");
@@ -754,7 +705,6 @@ fn generate_struct(
         output.push_str("}\n\n");
     }
 
-    // write_to_ptree impl
     output.push_str(&format!("impl {struct_name} {{\n"));
     output.push_str("    pub(crate) fn write_to_ptree(&self, mut pt: std::pin::Pin<&mut ffi::ptree>, prefix: &str) {\n");
     for (key, value) in entries {
@@ -772,14 +722,9 @@ fn generate_struct(
     output.push_str("    }\n");
     output.push_str("}\n\n");
 
-    // Recurse into child dicts after emitting self, so ConfigBuilder appears first.
     for (key, value) in entries {
         if let PyValue::Dict(child_entries) = value {
-            let child_path: Vec<&str> = path
-                .iter()
-                .copied()
-                .chain(std::iter::once(key.as_str()))
-                .collect();
+            let child_path = [path, &[key.as_str()]].concat();
             let child_name = struct_name_from_path(&child_path);
             generate_struct(output, &child_name, child_entries, &child_path, help);
         }

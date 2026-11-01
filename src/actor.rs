@@ -45,39 +45,16 @@ mod ffi {
 unsafe impl Send for ffi::Actor {}
 unsafe impl Sync for ffi::Actor {}
 
-/// Valhalla natively supports multiple response formats, such as JSON, OSRM-like JSON, PBF, and others.
-/// This format is specified on per-request basis using [`proto::Options`] `format` field, selecting one of the
-/// [`proto::options::Format`] options.
-///
-/// It is worth noting that at the moment not every endpoint supports all of the formats. For example,
-/// [`Actor::locate()`] will always return a Valhalla JSON response regardless of the `format` field in the request.
+/// Response of an [`Actor`] endpoint, in the format requested by the `format` field of
+/// [`proto::Options`]. Not every endpoint supports every format, e.g. [`Actor::locate()`] always
+/// returns JSON.
 #[derive(Debug, Clone)]
 pub enum Response {
-    /// Protocol Buffer response containing a structured [`proto::Api`] object.
-    ///
-    /// This format preserves full type information and is most efficient for
-    /// programmatic access. Only available when [`proto::options::Format::Pbf`]
-    /// is explicitly requested and the endpoint supports it.
-    ///
-    /// Set [`proto::PbfFieldSelector`] request option to get more detailed output.
+    /// [`proto::options::Format::Pbf`]. Set [`proto::PbfFieldSelector`] for more detailed output.
     Pbf(Box<proto::Api>),
-    /// JSON string response in either Valhalla or OSRM format.
-    ///
-    /// The JSON structure depends on which format was requested:
-    /// - [`proto::options::Format::Json`] returns Valhalla-native JSON
-    /// - [`proto::options::Format::Osrm`] returns OSRM-compatible JSON
-    ///
-    /// This is also the fallback format for most endpoints when other formats
-    /// are not supported, like in the case of [`Actor::locate()`] that always
-    /// returns a Valhalla JSON response.
+    /// Valhalla or OSRM JSON, also used when an endpoint doesn't support the requested format.
     Json(String),
-    /// Binary response for specialized formats.
-    ///
-    /// Currently used for:
-    /// - GPX files (XML format for GPS data)
-    /// - GeoTIFF files (raster geographic data)
-    ///
-    /// The actual format depends on the request and endpoint capabilities.
+    /// GPX or GeoTIFF.
     Other(Vec<u8>),
 }
 
@@ -96,8 +73,8 @@ impl From<ffi::Response> for Response {
 }
 
 /// High-level interface to interact with [Valhalla's API](https://valhalla.github.io/valhalla/api/).
-/// On contrary to the Valhalla REST and C++ APIs, this interface is designed to be used with [`proto::Options`] only,
-/// to avoid unnecessary conversions and to provide a strongly typed interface.
+/// Unlike Valhalla's HTTP and C++ APIs, it takes [`proto::Options`] only, which avoids conversions
+/// and keeps the interface strongly typed.
 pub struct Actor(cxx::UniquePtr<ffi::Actor>);
 
 impl Actor {
@@ -119,7 +96,7 @@ impl Actor {
 
     /// Calculates a route between locations.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// ```
     /// # fn call_route(actor: &mut valhalla::Actor) {
@@ -130,13 +107,13 @@ impl Actor {
     ///     costing_type: proto::costing::Type::Auto as i32,
     ///     locations: vec![
     ///         proto::Location {
-    ///              ll: valhalla::LatLon(55.6086, 13.0005).into(),
-    ///              ..Default::default()
-    ///          },
-    ///          proto::Location {
-    ///              ll: valhalla::LatLon(55.5944, 13.0002).into(),
-    ///              ..Default::default()
-    ///          },
+    ///             ll: valhalla::LatLon(55.6086, 13.0005).into(),
+    ///             ..Default::default()
+    ///         },
+    ///         proto::Location {
+    ///             ll: valhalla::LatLon(55.5944, 13.0002).into(),
+    ///             ..Default::default()
+    ///         },
     ///     ],
     ///     ..Default::default()
     /// };
@@ -155,7 +132,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_locate(mut actor: valhalla::Actor) {
+    /// # fn call_locate(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -183,7 +160,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_matrix(mut actor: valhalla::Actor) {
+    /// # fn call_matrix(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -214,7 +191,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_optimized_route(mut actor: valhalla::Actor) {
+    /// # fn call_optimized_route(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -247,7 +224,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_isochrone(mut actor: valhalla::Actor) {
+    /// # fn call_isochrone(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -278,7 +255,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_trace_route(mut actor: valhalla::Actor) {
+    /// # fn call_trace_route(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -300,7 +277,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_trace_attributes(mut actor: valhalla::Actor) {
+    /// # fn call_trace_attributes(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -322,7 +299,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_transit_available(mut actor: valhalla::Actor) {
+    /// # fn call_transit_available(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -346,7 +323,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_expansion(mut actor: valhalla::Actor) {
+    /// # fn call_expansion(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -379,7 +356,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_centroid(mut actor: valhalla::Actor) {
+    /// # fn call_centroid(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -408,7 +385,7 @@ impl Actor {
     /// # Examples
     ///
     /// ```
-    /// # fn call_status(mut actor: valhalla::Actor) {
+    /// # fn call_status(actor: &mut valhalla::Actor) {
     /// use valhalla::proto;
     ///
     /// let request = proto::Options {
@@ -422,7 +399,6 @@ impl Actor {
         self.act(ffi::Actor::status, request)
     }
 
-    /// Generic helper function to process request encoding, calling the endpoint and handling response.
     fn act<F>(&mut self, action_fn: F, request: &proto::Options) -> Result<Response, Error>
     where
         F: for<'a> Fn(
