@@ -1,5 +1,8 @@
 # Valhalla Rust bindings
 
+> [!IMPORTANT]
+> This repository is archived. The Rust bindings now live in Valhalla itself under [`src/bindings/rust`](https://github.com/valhalla/valhalla/tree/master/src/bindings/rust), and the [`valhalla`](https://crates.io/crates/valhalla) crate is published from there starting with 0.7.5.
+
 C++-to-Rust bindings for [Valhalla](https://github.com/valhalla/valhalla) Routing Engine, powered by [cxx](http://cxx.rs).
 
 The [`valhalla`](https://crates.io/crates/valhalla) crate provides drop-in infrastructure (`cargo add valhalla` and you're ready) for utility projects that need to access Valhalla's road graph data, expose additional Valhalla functionality, or benefit from calling Valhalla's routing engine in-process.
